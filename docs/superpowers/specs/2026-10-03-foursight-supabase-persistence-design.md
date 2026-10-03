@@ -4,6 +4,8 @@
 **Status:** Design approved in conversation; awaiting written-spec review  
 **Repository:** FourSight
 
+**Team ownership source:** `team-tasks/Yasir.md` and `TEAM_WORKPLAN.md`
+
 ## Goal
 
 Connect FourSight's existing civic reporting and community forum screens to Supabase so residents can create accounts, submit and follow city tickets, and discuss broader community concerns, while city staff update ticket status and moderators review flagged content.
@@ -27,6 +29,14 @@ Connect FourSight's existing civic reporting and community forum screens to Supa
 The current Vite/React app already has a Supabase JS client, a first schema migration, and report/forum TypeScript contracts, but `src/platform/data.ts` and `src/ui/App.tsx` currently persist app state in `localStorage` and use hard-coded demo identity. The implementation will introduce a Supabase-backed data/auth layer that maps database rows to the existing domain types, then make UI actions asynchronous and reflect loading and error states.
 
 The migration will be reviewed and amended through a new migration rather than editing an already-applied remote migration. It will address safe profile/display-name reads, public reporter names without emails, account role protections, status/event consistency, and any RLS or storage rules required by the real app flows. Public query surfaces will omit private account fields. Admin status updates will use the existing constrained database function or an equivalent reviewed RPC so state changes and event history stay consistent. Moderation must support hiding/restoring a post or an individual comment while retaining it for staff review.
+
+## Fit with Yasir's team assignment
+
+This work owns Yasir's responsibilities in `team-tasks/Yasir.md`: Supabase sign-in/session handling and protected role lookup; hosted report/forum persistence, loading, and permissions; forum posts, comments, flags and moderation; app-shell navigation/integration; and Vercel build/deployment configuration. Extract auth and forum responsibilities into `src/features/auth/` and `src/features/community/`, with `src/platform/data.ts` as the persistence adapter. `src/ui/App.tsx` and `src/ui/styles.css` remain Yasir's integration points.
+
+Before editing shared contracts in `src/domain/types.ts`, coordinate exact field and function/component contracts with Jack, Ayman, and Preet. Treat their feature modules as external inputs: integrate through exported component/API contracts, and keep the app buildable with narrow mocks/adapters until those modules are ready. Do not take ownership of Jack's media/report-delivery paths or Ayman's admin workflow paths, and do not put feature implementation inside `App.tsx`; it should compose features and provide shared app state/navigation. Keep Yasir's database changes in a new migration. Feature branches merge into `Yasir`; the integrated branch is built and reviewed before it is considered for `main`.
+
+Vercel configuration is limited to the app's build/deployment settings and documenting required environment variables. Do not create production deployments or publish secrets as part of local implementation. Integration validation includes the configured/unconfigured build, existing unit suite, and available resident/admin/forum smoke flows after modules are connected.
 
 ## Main flows
 
@@ -65,6 +75,8 @@ Show a clear connection/setup state when Supabase URL/key are missing. In that m
 - Confirm forum post/comment writes persist, broad topic categories are available, flags enter the moderation queue, and unauthorized users cannot hide/restore content.
 - Confirm relevant updates propagate by Realtime, while initial fetch remains usable if Realtime is unavailable.
 - Run Supabase security/performance advisors after schema changes and review any findings.
+- Confirm auth/forum/data code is in Yasir-owned feature paths, exported contracts are documented, and `App.tsx` composes rather than reimplements the feature modules.
+- Confirm Vercel build settings use only the browser-safe Supabase URL and publishable key and that `Yasir` remains the integration target.
 
 ## Scope boundaries
 
