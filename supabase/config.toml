@@ -1,0 +1,7 @@
+project_id = "foursight-civic"
+
+[functions.transcribe-video]
+verify_jwt = true
+
+[functions.forward-to-boston]
+verify_jwt = true
