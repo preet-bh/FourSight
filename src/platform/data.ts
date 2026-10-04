@@ -59,3 +59,5 @@ function mediaDb() {
     request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
   });
 }
+
+export { createSupabaseDataApis, civicDataApi, communityDataApi, mapPublicReport, mapStaffReport, mapCommunityPost, throwOnBackendError } from './supabase-data';
