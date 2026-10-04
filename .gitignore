@@ -6,3 +6,5 @@ dist/
 .vercel/
 coverage/
 *.tsbuildinfo
+.worktrees/
+.superpowers/

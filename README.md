@@ -2,7 +2,7 @@
 
 See it. Report it. Track it. FourSight is a mobile-friendly civic reporting demo with a regional issue map, ticket work queue, public status timeline, and neighborhood forum.
 
-## Run the hackathon demo
+## Run locally
 
 Requires Node.js 20 or newer.
 
@@ -11,26 +11,26 @@ npm install
 npm run dev
 ```
 
-Open the URL printed by Vite. Use **Switch to admin** in the sidebar to review tickets, assign a seeded team, advance a ticket, resolve it with a public note, or hide/restore it with an audit reason. Switch back to resident mode to submit reports, view map details, and post in the forum. The Boston and Dearborn regions have seeded sample tickets. Reports and discussions persist in this browser using localStorage; uploaded media is retained in IndexedDB.
+Open the URL printed by Vite. With Supabase environment variables configured, the map and forum load shared data, users can create accounts and sign in, residents can submit public reports, and city admins can work the staff queue. Signup email confirmation remains enabled. Without Supabase configuration, FourSight runs in a clearly labeled local demo with seeded reports and a resident/admin role switch; local data is stored in this browser.
 
 Run checks with `npm test` and `npm run build`.
 
-## Current integration boundary
+## Supabase and city integrations
 
-The runnable app is a self-contained local demo. It does not currently sync ticket/forum data to Supabase, provide production sign-in, or submit reports to Boston 311. It marks every new ticket's city delivery as **sandbox** so the UI never implies that city staff received it. The Supabase migration and Edge Functions are backend foundations for the next integration pass; they are not wired into the current local-first UI. The transcription button is available only after a Supabase client is configured and the signed-in user session is available. If the service is not configured, residents can enter a typed description.
+Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in `.env.local` for a connected app. Never put server secrets in `VITE_` variables. The resident map and forum remain readable without signing in; creating reports or participating in forum discussions requires an account. Public reports show the resident's chosen display name but never their email. Supabase Auth email confirmation remains enabled.
 
 The old single-file prototype remains at [`foursight.html`](./foursight.html) for reference. The new app is under `src/`.
 
 ## Supabase setup foundations
 
-1. Create a Supabase project and apply `supabase/migrations/202610030001_initial.sql` followed by `supabase/migrations/202610030002_admin_workflow.sql`.
-2. Create a private Storage bucket named `report-media` and add Storage policies matching the migration's report ownership and city-admin rules before storing live uploads. Keep sensitive media private and use short-lived signed URLs.
+1. Create a Supabase project and apply the migrations in `supabase/migrations/` in timestamp order. The FourSight project used for this implementation has these migrations applied and Auth email confirmation enabled.
+2. Ensure the private `report-media` bucket and policies from the migrations are deployed before storing live uploads. Media previews use short-lived signed URLs.
 3. Configure the Edge Function secrets below with `supabase secrets set`; do not put them in a `VITE_` variable or commit them.
 4. Deploy with `supabase functions deploy transcribe-video` and `supabase functions deploy forward-to-boston`.
 5. Add only the Supabase project URL and publishable key to local `.env` or Vercel environment variables. A trusted operator should promote the verified admin profile by UUID; never assign roles from editable user metadata.
-6. Request BOS:311 API access. Configure `BOS_311_ENDPOINT`, `BOS_311_API_KEY`, and one `BOS_311_SERVICE_CODE_<CATEGORY>` value for each exact category code after matching it to Boston's live catalog. Without these values, the function returns `sandbox`. Only Boston-region reports are eligible; the city API receives an initial request, while ticket status remains FourSight-owned.
+6. Request BOS:311 API access. Configure `BOS_311_ENDPOINT`, `BOS_311_API_KEY`, and one category mapping after matching its exact code to Boston's live catalog. The function checks the configured code against `{BOS_311_ENDPOINT}/services.json` before sending anything. Without credentials, a verified boundary, or a uniquely matching catalog entry, delivery remains `sandbox`. Only reports whose region is exactly Boston and whose coordinates are inside the configured boundary are eligible; FourSight ticket status remains independent.
 
-The admin queue and ticket controls are exported from [`src/features/admin/`](./src/features/admin/README.md). They are integration components and are not wired into the local demo app shell.
+The admin queue and ticket controls are exported from [`src/features/admin/`](./src/features/admin/README.md) and wired into the Supabase app shell. A trusted operator must promote the intended demo account's protected profile to `city_admin`; signup metadata cannot grant staff permissions.
 
 Server-only secrets for Supabase Edge Functions:
 
@@ -39,9 +39,9 @@ Server-only secrets for Supabase Edge Functions:
 - `BOS_311_ENDPOINT` (approved Open311 endpoint)
 - `BOS_311_BOUNDARY_GEOJSON` (verified City of Boston Polygon/MultiPolygon GeoJSON; outside-boundary locations stay sandboxed)
 - `BOS_311_API_KEY`
-- `BOS_311_SERVICE_CODE_STREET_AND_SIDEWALK`, `BOS_311_SERVICE_CODE_TRASH_SANITATION`, etc. Use codes verified against the approved BOS:311 catalog.
+- `BOS_311_SERVICE_CODE_STREET_SIDEWALK`, `BOS_311_SERVICE_CODE_TRASH_SANITATION`, `BOS_311_SERVICE_CODE_LIGHTING`, `BOS_311_SERVICE_CODE_PARKS`, `BOS_311_SERVICE_CODE_WATER_DRAINAGE`, `BOS_311_SERVICE_CODE_PUBLIC_SAFETY`, and `BOS_311_SERVICE_CODE_OTHER`; each needs a paired `BOS_311_SERVICE_NAME_<CATEGORY>` value (for example, `BOS_311_SERVICE_NAME_STREET_SIDEWALK`). Set only exact code/name pairs verified against the approved BOS:311 catalog.
 
-`forward-to-boston` expects a persisted Supabase report UUID and an authenticated owner. It refuses other regions, preserves delivery as separate from app status, and does not retry an uncertain request automatically. The current browser demo uses local IDs, so it cannot call this integration yet.
+`forward-to-boston` expects a saved Supabase report UUID and authenticated owner. Boston submissions are attempted only after the FourSight ticket is saved; other regions are not sent to Boston. Delivery status is separate from the FourSight ticket status. The local demo never sends city requests.
 
 ## Team split
 

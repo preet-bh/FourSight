@@ -74,6 +74,13 @@ create index forum_posts_region_idx on public.forum_posts(region, topic, created
 create index forum_comments_post_idx on public.forum_comments(post_id, created_at);
 create index forum_flags_queue_idx on public.forum_flags(action, created_at);
 
+create or replace function public.current_app_role() returns text
+language sql stable security definer set search_path = '' as $$
+  select role from public.profiles where id = (select auth.uid())
+$$;
+revoke all on function public.current_app_role() from public, anon;
+grant execute on function public.current_app_role() to authenticated;
+
 create or replace function public.can_view_report_media(object_name text) returns boolean
 language sql stable security definer set search_path = '' as $$
   select exists (
@@ -91,12 +98,6 @@ create view public.public_reports with (security_invoker = true) as
   from public.reports where not hidden_from_map;
 
 -- PostGIS is not required for the MVP map; coordinates are indexed when a geo-query extension is added.
-create or replace function public.current_app_role() returns text
-language sql stable security definer set search_path = '' as $$
-  select role from public.profiles where id = (select auth.uid())
-$$;
-revoke all on function public.current_app_role() from public, anon;
-grant execute on function public.current_app_role() to authenticated;
 
 create or replace function public.admin_transition_report(p_report_id uuid, p_status public.report_status, p_note text default null)
 returns void language plpgsql security definer set search_path = '' as $$

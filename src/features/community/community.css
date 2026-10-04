@@ -1,0 +1,76 @@
+.forum-page { padding-bottom: 50px; }
+.forum-page .page-heading { margin-bottom: 24px; }
+.forum-banner { display:flex; align-items:center; gap:13px; padding:15px 17px; background:linear-gradient(105deg,#221f30,#182028); border:1px solid #353147; border-radius:8px; margin-bottom:18px; }
+.forum-banner-icon { height:37px; width:37px; display:grid; place-items:center; background:#302a43; border-radius:9px; color:#b7a8f5; }
+.forum-banner>div:nth-child(2) { flex:1; }
+.forum-banner strong { font:600 12px var(--display); }
+.forum-banner p { font-size:10px; color:#969aaa; margin:5px 0 0; }
+.banner-count { font:600 17px var(--display); text-align:center; color:#d4cafb; }
+.banner-count small { display:block; font:9px 'DM Sans'; color:#878997; margin-top:3px; }
+.forum-toolbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:8px; }
+.topic-tabs { overflow:auto; }
+.topic-tabs button { padding:0 10px; white-space:nowrap; }
+.selected-filter { color:#c0b3fa; border-color:#534976; }
+.flag-count { background:#3a3030; color:#e19a8e; border-radius:8px; padding:2px 5px; font:8px var(--mono); }
+.forum-feed { display:flex; flex-direction:column; gap:9px; }
+.forum-post { position:relative; display:flex; gap:14px; padding:16px 15px; background:#151922; border:1px solid #282e39; border-radius:8px; }
+.post-vote { width:37px; flex:none; align-self:flex-start; display:flex; flex-direction:column; align-items:center; gap:3px; background:#1d202b; border:1px solid #303543; border-radius:6px; padding:5px 0; color:#ada2df; }
+.post-vote button { border:0; background:none; color:#a99de5; display:grid; place-items:center; }
+.post-vote strong { font:600 12px var(--display); color:#ded7f8; }
+.post-vote small { font-size:7px; color:#838998; }
+.post-content { flex:1; min-width:0; }
+.post-topic { font:9px var(--mono); color:#a99ae5; letter-spacing:.2px; }
+.post-topic span { color:#57606e; margin:0 3px; }
+.post-content h2 { font:600 13px var(--display); margin:7px 0; color:#e5e7ed; }
+.post-content>p { font-size:10px; color:#9aa2af; line-height:1.6; margin:0 0 8px; white-space:pre-wrap; }
+.report-reference { display:inline-block; margin:0 0 9px; color:#b6a7f2; font-size:9px; text-decoration:none; }
+.report-reference:hover { text-decoration:underline; }
+.post-meta { display:flex; align-items:center; gap:6px; font-size:9px; color:#78818f; }
+.mini-avatar { width:18px; height:18px; font-size:8px; background:linear-gradient(135deg,#c8a87b,#8d708f); }
+.post-meta button,.comment-flag { border:0; background:none; color:#8d95a3; display:flex; align-items:center; gap:4px; margin-left:9px; font-size:9px; padding:2px; cursor:pointer; }
+.post-meta button:hover,.comment-flag:hover { color:#c3b7ff; }
+.comment-box { display:flex; gap:7px; margin:13px 0 0; }
+.comment-box input { width:100%; height:31px; background:#10141b; border:1px solid #303744; color:#e7e9ed; border-radius:5px; padding:7px 10px; font-size:11px; }
+.comment-box .primary-button { padding:6px 9px; font-size:9px; white-space:nowrap; }
+.comment-item { display:flex; gap:8px; border-top:1px solid #272d38; padding-top:10px; margin-top:12px; }
+.comment-item>div:last-child { flex:1; }
+.comment-item strong { font-size:9px; margin-right:8px; }
+.comment-item time { color:#7b8492; font-size:8px; }
+.comment-item p { font-size:9px; color:#9ba2ae; margin:4px 0 0; line-height:1.5; white-space:pre-wrap; }
+.comment-flag { margin:5px 0 0; font-size:8px; }
+.hidden-comment { opacity:.65; }
+.hidden-post { opacity:.7; border-color:#563537; }
+.forum-empty { padding:25px 15px; text-align:center; font-size:11px; color:#7f8795; }
+.forum-error,.forum-notice { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 12px; padding:10px 12px; border-radius:6px; font-size:10px; }
+.forum-signin-prompt { margin:0 0 12px; padding:10px 12px; border:1px solid #48415f; border-radius:6px; background:#211f2d; color:#c8bdf4; font-size:10px; line-height:1.5; }
+.forum-error { color:#efb0a9; background:#302126; border:1px solid #634044; }
+.forum-notice { color:#b9d6c7; background:#1c2b25; border:1px solid #355345; }
+.forum-notice button { border:0; background:none; color:inherit; display:grid; place-items:center; }
+.moderation-queue { margin:0 0 14px; padding:13px 15px; background:#171922; border:1px solid #373246; border-radius:8px; }
+.moderation-queue h2 { display:flex; align-items:center; gap:7px; margin:0 0 9px; font:600 12px var(--display); color:#d5cdf9; }
+.moderation-queue h2 span { color:#8e85b3; font:9px var(--mono); }
+.moderation-flag { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:10px 0; border-top:1px solid #2c2d39; }
+.moderation-flag>div:first-child { min-width:0; }
+.moderation-flag strong { font-size:10px; }
+.moderation-flag p { overflow:hidden; margin:4px 0; color:#c7c3d6; font-size:9px; text-overflow:ellipsis; white-space:nowrap; }
+.moderation-flag small { color:#858394; font-size:8px; }
+.moderation-actions { display:flex; gap:6px; flex:none; }
+.moderation-actions button { border:1px solid #373d49; border-radius:4px; background:#202530; color:#aeb4c0; font-size:8px; padding:5px 7px; cursor:pointer; }
+.moderation-actions button:hover { border-color:#7669a5; color:#ded7fa; }
+.compose-modal { width:min(490px,100%); }
+.compose-modal .eyebrow { margin-bottom:7px; }
+.compose-modal .field-label { margin:13px 0; }
+.compose-modal .modal-actions { margin-top:19px; }
+.compose-modal h2 { font:600 16px var(--display); margin:0; }
+.compose-modal .field-label input,.compose-modal .field-label select,.compose-modal .field-label textarea { width:100%; background:#10141b; border:1px solid #303744; color:#e7e9ed; border-radius:5px; padding:9px 10px; font-size:11px; }
+.compose-modal .field-label textarea { min-height:76px; resize:vertical; }
+@media(max-width:720px) {
+  .forum-toolbar { align-items:flex-start; flex-direction:column; }
+  .topic-tabs { max-width:100%; }
+  .forum-post { padding:12px 9px; gap:9px; }
+  .post-content h2 { font-size:11px; }
+  .post-content>p { font-size:9px; }
+  .post-meta { flex-wrap:wrap; }
+  .post-meta button { margin-left:3px; }
+  .moderation-flag { align-items:flex-start; flex-direction:column; }
+}
