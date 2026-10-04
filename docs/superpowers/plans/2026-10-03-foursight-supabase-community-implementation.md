@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Require email/password sign-up with a display name and syntactically valid email; disable email confirmation and do not require OTP or email-link verification.
+- Require email/password sign-up with a display name and syntactically valid email; keep Supabase email confirmation enabled and use its link flow, with no OTP codes.
 - Public users may view visible reports, public status histories, disclosed media, and visible forum content; sign-in is required to submit or participate.
 - Public records may show display names but never account email; keep emails and protected roles out of public projections.
 - Use RLS on every exposed table and trust only protected profile role data for admin/moderator authorization.
@@ -53,7 +53,8 @@ type AuthState = {
   status: 'loading' | 'signed_out' | 'signed_in' | 'demo';
   user: { id: string; displayName: string; role: AuthRole } | null;
 };
-type PublicReportRecord = Omit<Report, 'reporterId'> & { reporterName: string };
+type PublicReportRecord = Omit<Report, 'reporterId' | 'hideReason'> & { databaseId: string; reporterName: string };
+type StaffReportRecord = Omit<Report, 'reporterId'> & { databaseId: string; reporterName: string };
 type ReportMediaUpload = {
   file: File; kind: ReportMedia['kind']; label?: string; selectedFrameSeconds?: number;
 };
@@ -67,17 +68,19 @@ type ModerationTarget = { kind: 'post' | 'comment'; id: string };
 interface AuthApi {
   getState(): Promise<AuthState>;
   subscribe(listener: (state: AuthState) => void): () => void;
-  signUp(input: { displayName: string; email: string; password: string }): Promise<void>;
+  signUp(input: { displayName: string; email: string; password: string }): Promise<{ confirmationRequired: true }>;
   signIn(input: { email: string; password: string }): Promise<void>;
   signOut(): Promise<void>;
 }
 interface CivicDataApi {
   listReports(region: string): Promise<PublicReportRecord[]>;
+  listStaffReports(region: string): Promise<StaffReportRecord[]>;
   getReport(publicId: string): Promise<PublicReportRecord | null>;
   createReport(input: NewReportInput): Promise<PublicReportRecord>;
-  assignTeam(publicId: string, teamId: string | null): Promise<void>;
-  transitionReport(publicId: string, status: TicketStatus, note?: string): Promise<void>;
-  setReportVisibility(publicId: string, hidden: boolean, reason?: string): Promise<void>;
+  listTeams(): Promise<Team[]>;
+  assignTeam(databaseId: string, teamId: string | null): Promise<void>;
+  transitionReport(databaseId: string, status: TicketStatus, note?: string): Promise<void>;
+  setReportVisibility(databaseId: string, hidden: boolean, reason: string): Promise<void>;
   subscribeReports(region: string, listener: (reports: PublicReportRecord[]) => void): () => void;
 }
 interface CommunityDataApi {
@@ -90,11 +93,11 @@ interface CommunityDataApi {
 }
 ```
 
-Adapters map the existing UI-facing `Report`/`ForumPost` contracts at this boundary. Email and role data must never be part of `PublicReportRecord` or `CommunityPost`.
+Adapters map the existing UI-facing `Report`/`ForumPost` contracts at this boundary. `Report.id` remains the public ticket label; `databaseId` is the UUID required by admin RPCs. `PublicReportRecord` omits account id and staff-only hide reason; `StaffReportRecord` may include hide reason. Email and role data must never be part of report or community records.
 
 - [ ] Reconfirm the known $0/month project estimate using the Supabase tool and create `FourSight` in `yasirshah-csds`, US East.
 - [ ] Wait for project initialization and retrieve its URL and publishable key; put values only in ignored local environment configuration and preserve blank `.env.example` placeholders.
-- [ ] Configure email/password signup without email confirmation using the project's Auth settings; if the connected tooling cannot change this setting, record the exact dashboard action needed before wiring signup.
+- [ ] Verify the project's Auth settings keep email confirmation enabled; use confirmation links and do not enable OTP codes.
 - [ ] Define the auth, civic data, and community API signatures from the existing domain types. Include async loading/error contracts and public/private response distinctions.
 - [ ] Review the contract against the existing Jack/Ayman/Preet branch exports when available; record compatibility adapters instead of silently changing shared ticket types.
 
@@ -130,8 +133,8 @@ Adapters map the existing UI-facing `Report`/`ForumPost` contracts at this bound
 - Consumes: `AuthApi`/`AuthState` from `src/platform/contracts.ts` and the configured Supabase client.
 - Produces: email/password signup and sign-in, display-name collection, session observation/sign-out, and protected profile role lookup for app-shell composition.
 
-- [ ] Add failing tests for email-format validation, signup metadata construction, no-confirmation signup behavior, and safe role defaults; run them to demonstrate the expected failures.
-- [ ] Implement signup with name/email/password and user-facing validation; do not send or require OTP or confirmation links.
+- [ ] Add failing tests for email-format validation, signup metadata construction, confirmation-required signup behavior, and safe role defaults; run them to demonstrate the expected failures.
+- [ ] Implement signup with name/email/password and user-facing validation; show a check-your-email state after signup and do not use OTP codes.
 - [ ] Implement sign-in, session restore/listener, sign-out, and profile role lookup. Ignore user-editable metadata when deciding staff permissions.
 - [ ] Build an accessible auth panel for app-shell use and add focused auth-service tests.
 - [ ] Run auth tests and confirm no email address is rendered into public report/forum props.
