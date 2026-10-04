@@ -197,7 +197,7 @@ function reply(body: unknown, status = 200) {
 }
 
 async function claimDelivery(
-  client: ReturnType<typeof createClient>,
+  client: ReturnType<typeof createClient<any>>,
   reportId: string,
   action: ReturnType<typeof deliveryClaimAction>,
 ): Promise<{ claimed: boolean; error: unknown }> {
@@ -236,7 +236,7 @@ async function claimDelivery(
 }
 
 async function transitionDelivery(
-  client: ReturnType<typeof createClient>,
+  client: ReturnType<typeof createClient<any>>,
   reportId: string,
   state: 'submitted' | 'sandbox' | 'failed',
   message: string,
@@ -252,13 +252,13 @@ async function transitionDelivery(
   return { updated: Boolean(data), error };
 }
 
-async function saveSandbox(client: ReturnType<typeof createClient>, reportId: string, message: string) {
+async function saveSandbox(client: ReturnType<typeof createClient<any>>, reportId: string, message: string) {
   const result = await transitionDelivery(client, reportId, 'sandbox', message);
   if (result.error || !result.updated) return reply({ error: 'Could not save the sandbox delivery result.' }, 500);
   return reply({ delivery: 'sandbox', message });
 }
 
-async function saveFailure(client: ReturnType<typeof createClient>, reportId: string, message: string) {
+async function saveFailure(client: ReturnType<typeof createClient<any>>, reportId: string, message: string) {
   const result = await transitionDelivery(client, reportId, 'failed', message);
   if (result.error || !result.updated) return reply({ error: 'Delivery failed and FourSight could not save its delivery state. Do not retry until reviewed.' }, 500);
   return reply({ delivery: 'failed', message });
