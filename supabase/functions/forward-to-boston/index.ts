@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.0';
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
+import { deliveryClaimAction } from '../_shared/delivery-claim.ts';
 
 const cors = {
   'Access-Control-Allow-Origin': Deno.env.get('APP_ORIGIN') ?? '*',
@@ -53,7 +54,7 @@ serve(async (request) => {
 
   const { data: previous, error: previousError } = await adminClient
     .from('report_delivery')
-    .select('state,external_reference')
+    .select('state,external_reference,message')
     .eq('report_id', report.id)
     .maybeSingle();
   if (previousError) return reply({ error: 'Could not verify the report delivery state.' }, 500);
@@ -61,10 +62,12 @@ serve(async (request) => {
     if (!previous.external_reference) return reply({ delivery: 'failed', message: 'A prior submission has no saved city reference; manual review is required.' });
     return reply({ delivery: 'submitted', reference: previous.external_reference, message: 'Already submitted; duplicate prevented.' });
   }
-  if (previous?.state === 'pending' || previous?.state === 'failed') {
+  const claimAction = deliveryClaimAction(previous ?? null);
+  if (claimAction === 'ambiguous') {
     return reply({ delivery: 'failed', message: 'A prior delivery attempt is pending or ambiguous; check Boston 311 before retrying.' });
   }
-  const claim = await claimDelivery(adminClient, report.id, previous?.state ?? null);
+  if (claimAction === 'none') return reply({ delivery: 'failed', message: 'This report delivery cannot be safely retried.' });
+  const claim = await claimDelivery(adminClient, report.id, claimAction);
   if (claim.error) return reply({ error: 'Could not safely claim the city delivery attempt.' }, 500);
   if (!claim.claimed) return reply({ delivery: 'failed', message: 'Another delivery attempt has already started; check its result before retrying.' });
 
@@ -196,7 +199,7 @@ function reply(body: unknown, status = 200) {
 async function claimDelivery(
   client: ReturnType<typeof createClient>,
   reportId: string,
-  previousState: string | null,
+  action: ReturnType<typeof deliveryClaimAction>,
 ): Promise<{ claimed: boolean; error: unknown }> {
   const values = {
     report_id: reportId,
@@ -205,7 +208,7 @@ async function claimDelivery(
     message: 'Submitting to Boston 311.',
     updated_at: new Date().toISOString(),
   };
-  if (previousState === 'sandbox') {
+  if (action === 'claim_sandbox') {
     const { data, error } = await client
       .from('report_delivery')
       .update(values)
@@ -215,7 +218,18 @@ async function claimDelivery(
       .maybeSingle();
     return { claimed: Boolean(data), error };
   }
-  if (previousState !== null) return { claimed: false, error: null };
+  if (action === 'claim_pending') {
+    const { data, error } = await client
+      .from('report_delivery')
+      .update(values)
+      .eq('report_id', reportId)
+      .eq('state', 'pending')
+      .is('message', null)
+      .select('report_id')
+      .maybeSingle();
+    return { claimed: Boolean(data), error };
+  }
+  if (action !== 'claim_new') return { claimed: false, error: null };
   const { data, error } = await client.from('report_delivery').insert(values).select('report_id').maybeSingle();
   if (error && error.code === '23505') return { claimed: false, error: null };
   return { claimed: Boolean(data), error };

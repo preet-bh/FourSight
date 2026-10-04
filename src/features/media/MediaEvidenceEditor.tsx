@@ -35,6 +35,7 @@ export default function MediaEvidenceEditor({ onChange, disabled = false }: Prop
   const [previewUrl, setPreviewUrl] = useState('');
   const [duration, setDuration] = useState(0);
   const [frameSeconds, setFrameSeconds] = useState(0);
+  const [selectedFrameSeconds, setSelectedFrameSeconds] = useState<number | null>(null);
   const [frameFile, setFrameFile] = useState<File | null>(null);
   const [description, setDescription] = useState('');
   const [transcript, setTranscript] = useState('');
@@ -60,13 +61,13 @@ export default function MediaEvidenceEditor({ onChange, disabled = false }: Prop
       mediaFile: file,
       mediaKind: kind,
       selectedFrameFile: frameFile,
-      selectedFrameSeconds: frameFile ? frameSeconds : null,
+      selectedFrameSeconds: frameFile ? selectedFrameSeconds : null,
       description,
       transcriptDraft: transcript,
       transcriptConfirmed: Boolean(transcript.trim()) && transcriptConfirmed,
       confirmedTranscript: transcript.trim() && transcriptConfirmed ? transcript.trim() : '',
     });
-  }, [description, file, frameFile, frameSeconds, kind, transcript, transcriptConfirmed]);
+  }, [description, file, frameFile, frameSeconds, kind, selectedFrameSeconds, transcript, transcriptConfirmed]);
 
   const chooseFile = async (next: File | null) => {
     if (!next) return;
@@ -80,6 +81,7 @@ export default function MediaEvidenceEditor({ onChange, disabled = false }: Prop
       setDuration(nextDuration);
       setFrameSeconds(0);
       setFrameFile(null);
+      setSelectedFrameSeconds(null);
       setTranscript('');
       setTranscriptConfirmed(false);
     } catch (error) {
@@ -95,6 +97,7 @@ export default function MediaEvidenceEditor({ onChange, disabled = false }: Prop
     setDuration(0);
     setFrameSeconds(0);
     setFrameFile(null);
+    setSelectedFrameSeconds(null);
     setTranscript('');
     setTranscriptConfirmed(false);
   };
@@ -121,6 +124,7 @@ export default function MediaEvidenceEditor({ onChange, disabled = false }: Prop
     }
     const seconds = Math.round(video.currentTime * 100) / 100;
     setFrameSeconds(seconds);
+    setSelectedFrameSeconds(seconds);
     setFrameFile(new File([blob], `evidence-frame-${seconds.toFixed(2)}s.jpg`, { type: 'image/jpeg' }));
     setMessage(`Evidence frame selected at ${seconds.toFixed(2)} seconds.`);
   };
@@ -179,7 +183,7 @@ export default function MediaEvidenceEditor({ onChange, disabled = false }: Prop
               <button type="button" disabled={disabled || busy} onClick={() => { void captureFrame(); }}>
                 Select current frame
               </button>
-              {frameFile && <p>Selected image frame at {frameSeconds.toFixed(2)} seconds will accompany the full video.</p>}
+                {frameFile && <p>Selected image frame at {selectedFrameSeconds?.toFixed(2)} seconds will accompany the full video.</p>}
               <button type="button" disabled={disabled || busy} onClick={() => { void transcribe(); }}>
                 {busy ? 'Transcribing…' : 'Generate transcript'}
               </button>
@@ -217,8 +221,7 @@ export default function MediaEvidenceEditor({ onChange, disabled = false }: Prop
         />
       </label>
       {message && <p role="status">{message}</p>}
-      <p>Save the FourSight report before calling `forwardSavedReportToBoston` with its persisted id.</p>
-      {file && <p>Attached {kind} stays in FourSight; the selected frame is separate evidence for city forwarding.</p>}
+      {file && <p>The {kind} stays attached to this report. The selected frame can also be shared with city services.</p>}
     </section>
   );
 }

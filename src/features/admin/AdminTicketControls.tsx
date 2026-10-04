@@ -34,7 +34,7 @@ export function PublicTicketTimeline({ report }: { report: Report }) {
   </section>;
 }
 
-export function AdminTicketControls({ report, teams, onAssignTeam, onTransition, onSetVisibility }: AdminTicketControlsProps) {
+export function AdminTicketControls({ report, teams, onAssignTeam, onTransition, onSetVisibility, showTimeline = true }: AdminTicketControlsProps & { showTimeline?: boolean }) {
   const [note, setNote] = useState('');
   const [completionPhoto, setCompletionPhoto] = useState<File | null>(null);
   const [visibilityIntent, setVisibilityIntent] = useState<boolean | null>(null);
@@ -121,7 +121,6 @@ export function AdminTicketControls({ report, teams, onAssignTeam, onTransition,
     </div>
     {error && <p className="field-error" role="alert">{error}</p>}
     {report.hiddenFromMap && report.hideReason && <p className="muted-table">Current hide reason: {report.hideReason}</p>}
-    <h4>Public progress timeline</h4>
-    <PublicTicketTimeline report={report}/>
+    {showTimeline && <><h4>Public progress timeline</h4><PublicTicketTimeline report={report}/></>}
   </section>;
 }
