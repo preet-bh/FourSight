@@ -35,6 +35,7 @@ export default function MediaEvidenceEditor({ onChange, disabled = false }: Prop
   const [previewUrl, setPreviewUrl] = useState('');
   const [duration, setDuration] = useState(0);
   const [frameSeconds, setFrameSeconds] = useState(0);
+  const [selectedFrameSeconds, setSelectedFrameSeconds] = useState<number | null>(null);
   const [frameFile, setFrameFile] = useState<File | null>(null);
   const [description, setDescription] = useState('');
   const [transcript, setTranscript] = useState('');
@@ -60,13 +61,13 @@ export default function MediaEvidenceEditor({ onChange, disabled = false }: Prop
       mediaFile: file,
       mediaKind: kind,
       selectedFrameFile: frameFile,
-      selectedFrameSeconds: frameFile ? frameSeconds : null,
+      selectedFrameSeconds: frameFile ? selectedFrameSeconds : null,
       description,
       transcriptDraft: transcript,
       transcriptConfirmed: Boolean(transcript.trim()) && transcriptConfirmed,
       confirmedTranscript: transcript.trim() && transcriptConfirmed ? transcript.trim() : '',
     });
-  }, [description, file, frameFile, frameSeconds, kind, transcript, transcriptConfirmed]);
+  }, [description, file, frameFile, frameSeconds, kind, selectedFrameSeconds, transcript, transcriptConfirmed]);
 
   const chooseFile = async (next: File | null) => {
     if (!next) return;
@@ -79,6 +80,7 @@ export default function MediaEvidenceEditor({ onChange, disabled = false }: Prop
       setKind(nextKind);
       setDuration(nextDuration);
       setFrameSeconds(0);
+      setSelectedFrameSeconds(null);
       setFrameFile(null);
       setTranscript('');
       setTranscriptConfirmed(false);
@@ -94,6 +96,7 @@ export default function MediaEvidenceEditor({ onChange, disabled = false }: Prop
     setKind(null);
     setDuration(0);
     setFrameSeconds(0);
+    setSelectedFrameSeconds(null);
     setFrameFile(null);
     setTranscript('');
     setTranscriptConfirmed(false);
@@ -101,8 +104,39 @@ export default function MediaEvidenceEditor({ onChange, disabled = false }: Prop
 
   const captureFrame = async () => {
     const video = videoRef.current;
-    if (!video || !video.videoWidth || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+    if (!video || !video.videoWidth) {
       setMessage('Play or seek to a clear frame before selecting evidence.');
+      return;
+    }
+    if (video.seeking) {
+      try {
+        await new Promise<void>((resolve, reject) => {
+          let timeout = 0;
+          const cleanup = () => {
+            window.clearTimeout(timeout);
+            video.removeEventListener('seeked', onSeeked);
+            video.removeEventListener('error', onError);
+          };
+          const onSeeked = () => { cleanup(); resolve(); };
+          const onError = () => { cleanup(); reject(new Error('Could not seek to the selected video frame.')); };
+          video.addEventListener('seeked', onSeeked, { once: true });
+          video.addEventListener('error', onError, { once: true });
+          timeout = window.setTimeout(() => {
+            cleanup();
+            reject(new Error('The video did not reach the selected frame. Try again.'));
+          }, 5000);
+        });
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : 'Could not reach the selected frame. Try again.');
+        return;
+      }
+    }
+    if (video.seeking) {
+      setMessage('The video is still seeking. Wait for it to pause on the selected frame, then try again.');
+      return;
+    }
+    if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      setMessage('The selected frame is not ready yet. Try again.');
       return;
     }
     const canvas = document.createElement('canvas');
@@ -121,6 +155,7 @@ export default function MediaEvidenceEditor({ onChange, disabled = false }: Prop
     }
     const seconds = Math.round(video.currentTime * 100) / 100;
     setFrameSeconds(seconds);
+    setSelectedFrameSeconds(seconds);
     setFrameFile(new File([blob], `evidence-frame-${seconds.toFixed(2)}s.jpg`, { type: 'image/jpeg' }));
     setMessage(`Evidence frame selected at ${seconds.toFixed(2)} seconds.`);
   };
@@ -179,7 +214,7 @@ export default function MediaEvidenceEditor({ onChange, disabled = false }: Prop
               <button type="button" disabled={disabled || busy} onClick={() => { void captureFrame(); }}>
                 Select current frame
               </button>
-              {frameFile && <p>Selected image frame at {frameSeconds.toFixed(2)} seconds will accompany the full video.</p>}
+              {frameFile && <p>Selected image frame at {selectedFrameSeconds?.toFixed(2)} seconds will accompany the full video.</p>}
               <button type="button" disabled={disabled || busy} onClick={() => { void transcribe(); }}>
                 {busy ? 'Transcribing…' : 'Generate transcript'}
               </button>

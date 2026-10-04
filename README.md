@@ -28,7 +28,7 @@ The old single-file prototype remains at [`foursight.html`](./foursight.html) fo
 3. Configure the Edge Function secrets below with `supabase secrets set`; do not put them in a `VITE_` variable or commit them.
 4. Deploy with `supabase functions deploy transcribe-video` and `supabase functions deploy forward-to-boston`.
 5. Add only the Supabase project URL and publishable key to local `.env` or Vercel environment variables. A trusted operator should promote the verified admin profile by UUID; never assign roles from editable user metadata.
-6. Request BOS:311 API access. Configure `BOS_311_ENDPOINT`, `BOS_311_API_KEY`, and one category mapping after matching its exact code to Boston's live catalog. The function checks the configured code against `{BOS_311_ENDPOINT}/services.json` before sending anything. Without credentials, a verified boundary, or a uniquely matching catalog entry, delivery remains `sandbox`. Only reports whose region is exactly Boston and whose coordinates are inside the configured boundary are eligible; FourSight ticket status remains independent.
+6. Request BOS:311 API access. Configure `BOS_311_ENDPOINT`, `BOS_311_API_KEY`, and a category mapping with the exact service code and service name verified from Boston's live catalog. The function requires the configured code and name to match one unique entry from `{BOS_311_ENDPOINT}/services.json` before sending anything. Without credentials, a verified boundary, or a unique code/name match, delivery remains `sandbox`. Only reports whose region is exactly Boston and whose coordinates are inside the configured boundary are eligible; FourSight ticket status remains independent.
 
 The admin queue and ticket controls are exported from [`src/features/admin/`](./src/features/admin/README.md). They are integration components and are not wired into the local demo app shell.
 
@@ -39,9 +39,9 @@ Server-only secrets for Supabase Edge Functions:
 - `BOS_311_ENDPOINT` (approved Open311 endpoint)
 - `BOS_311_BOUNDARY_GEOJSON` (verified City of Boston Polygon/MultiPolygon GeoJSON; outside-boundary locations stay sandboxed)
 - `BOS_311_API_KEY`
-- `BOS_311_SERVICE_CODE_STREET_SIDEWALK`, `BOS_311_SERVICE_CODE_TRASH_SANITATION`, `BOS_311_SERVICE_CODE_LIGHTING`, `BOS_311_SERVICE_CODE_PARKS`, `BOS_311_SERVICE_CODE_WATER_DRAINAGE`, `BOS_311_SERVICE_CODE_PUBLIC_SAFETY`, and `BOS_311_SERVICE_CODE_OTHER`. Set only mappings verified against the approved BOS:311 catalog.
+- `BOS_311_SERVICE_CODE_STREET_SIDEWALK`, `BOS_311_SERVICE_CODE_TRASH_SANITATION`, `BOS_311_SERVICE_CODE_LIGHTING`, `BOS_311_SERVICE_CODE_PARKS`, `BOS_311_SERVICE_CODE_WATER_DRAINAGE`, `BOS_311_SERVICE_CODE_PUBLIC_SAFETY`, and `BOS_311_SERVICE_CODE_OTHER`, each paired with its `BOS_311_SERVICE_NAME_<CATEGORY>` value (for example, `BOS_311_SERVICE_NAME_STREET_SIDEWALK`). Set only exact code/name mappings verified against the approved BOS:311 catalog.
 
-`forward-to-boston` expects a persisted Supabase report UUID and an authenticated owner. It verifies each configured service code against the live catalog, uses a selected evidence frame for `media_url` when one is attached, preserves delivery as separate from app status, and will not automatically retry pending or ambiguous requests. The current browser demo uses local IDs, so it cannot call this integration yet.
+`forward-to-boston` expects a persisted Supabase report UUID and an authenticated owner. It verifies each configured service code and service name together against the live catalog, uses a selected evidence frame for `media_url` when one is attached, preserves delivery as separate from app status, and will not automatically retry pending or ambiguous requests. The current browser demo uses local IDs, so it cannot call this integration yet.
 
 ## Team split
 

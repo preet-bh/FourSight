@@ -7,14 +7,14 @@ const cors = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const serviceCodeEnvironment: Record<string, string> = {
-  'Street & sidewalk': 'BOS_311_SERVICE_CODE_STREET_SIDEWALK',
-  'Trash & sanitation': 'BOS_311_SERVICE_CODE_TRASH_SANITATION',
-  Lighting: 'BOS_311_SERVICE_CODE_LIGHTING',
-  Parks: 'BOS_311_SERVICE_CODE_PARKS',
-  'Water & drainage': 'BOS_311_SERVICE_CODE_WATER_DRAINAGE',
-  'Public safety': 'BOS_311_SERVICE_CODE_PUBLIC_SAFETY',
-  Other: 'BOS_311_SERVICE_CODE_OTHER',
+const serviceMappingEnvironment: Record<string, { code: string; name: string }> = {
+  'Street & sidewalk': { code: 'BOS_311_SERVICE_CODE_STREET_SIDEWALK', name: 'BOS_311_SERVICE_NAME_STREET_SIDEWALK' },
+  'Trash & sanitation': { code: 'BOS_311_SERVICE_CODE_TRASH_SANITATION', name: 'BOS_311_SERVICE_NAME_TRASH_SANITATION' },
+  Lighting: { code: 'BOS_311_SERVICE_CODE_LIGHTING', name: 'BOS_311_SERVICE_NAME_LIGHTING' },
+  Parks: { code: 'BOS_311_SERVICE_CODE_PARKS', name: 'BOS_311_SERVICE_NAME_PARKS' },
+  'Water & drainage': { code: 'BOS_311_SERVICE_CODE_WATER_DRAINAGE', name: 'BOS_311_SERVICE_NAME_WATER_DRAINAGE' },
+  'Public safety': { code: 'BOS_311_SERVICE_CODE_PUBLIC_SAFETY', name: 'BOS_311_SERVICE_NAME_PUBLIC_SAFETY' },
+  Other: { code: 'BOS_311_SERVICE_CODE_OTHER', name: 'BOS_311_SERVICE_NAME_OTHER' },
 };
 
 serve(async (request) => {
@@ -83,12 +83,13 @@ serve(async (request) => {
     return saveSandbox(adminClient, report.id, 'Report location is outside the verified Boston boundary; no city request was sent.');
   }
 
-  const envName = serviceCodeEnvironment[report.category];
-  const serviceCode = envName ? Deno.env.get(envName)?.trim() : undefined;
+  const mappingEnvironment = serviceMappingEnvironment[report.category];
+  const serviceCode = mappingEnvironment ? Deno.env.get(mappingEnvironment.code)?.trim() : undefined;
+  const expectedServiceName = mappingEnvironment ? Deno.env.get(mappingEnvironment.name)?.trim() : undefined;
   const endpoint = Deno.env.get('BOS_311_ENDPOINT')?.trim();
   const apiKey = Deno.env.get('BOS_311_API_KEY')?.trim();
-  if (!serviceCode || !endpoint || !apiKey) {
-    return saveSandbox(adminClient, report.id, 'Boston 311 credentials or a category mapping are not configured; no city request was sent.');
+  if (!serviceCode || !expectedServiceName || !endpoint || !apiKey) {
+    return saveSandbox(adminClient, report.id, 'Boston 311 credentials or a verified category mapping are not configured; no city request was sent.');
   }
 
   const baseUrl = endpoint.replace(/\/+$/, '');
@@ -114,13 +115,15 @@ serve(async (request) => {
   if (!catalogResponse.ok || !Array.isArray(catalog)) {
     return saveSandbox(adminClient, report.id, 'Boston 311 service catalog could not be verified; no city request was sent.');
   }
-  const matches = catalog.filter(item =>
+  const codeMatches = catalog.filter(item =>
     item && typeof item === 'object' &&
-    'service_code' in item && item.service_code === serviceCode &&
-    'service_name' in item && typeof item.service_name === 'string' && item.service_name.trim()
+    'service_code' in item && item.service_code === serviceCode
   );
-  if (matches.length !== 1) {
-    return saveSandbox(adminClient, report.id, 'The configured category code is not uniquely verified in the Boston 311 catalog; no city request was sent.');
+  const catalogName = codeMatches.length === 1 && 'service_name' in codeMatches[0] && typeof codeMatches[0].service_name === 'string'
+    ? codeMatches[0].service_name.trim()
+    : '';
+  if (codeMatches.length !== 1 || catalogName !== expectedServiceName) {
+    return saveSandbox(adminClient, report.id, 'The configured category code and service name do not uniquely match the Boston 311 catalog; no city request was sent.');
   }
 
   const { data: selectedFrame, error: mediaError } = await adminClient
