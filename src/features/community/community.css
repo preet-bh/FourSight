@@ -14,16 +14,12 @@
 .flag-count { background:#3a3030; color:#e19a8e; border-radius:8px; padding:2px 5px; font:8px var(--mono); }
 .forum-feed { display:flex; flex-direction:column; gap:9px; }
 .forum-post { position:relative; display:flex; gap:14px; padding:16px 15px; background:#151922; border:1px solid #282e39; border-radius:8px; }
-.post-vote { width:37px; flex:none; align-self:flex-start; display:flex; flex-direction:column; align-items:center; gap:3px; background:#1d202b; border:1px solid #303543; border-radius:6px; padding:5px 0; color:#ada2df; }
-.post-vote button { border:0; background:none; color:#a99de5; display:grid; place-items:center; }
-.post-vote strong { font:600 12px var(--display); color:#ded7f8; }
-.post-vote small { font-size:7px; color:#838998; }
 .post-content { flex:1; min-width:0; }
 .post-topic { font:9px var(--mono); color:#a99ae5; letter-spacing:.2px; }
 .post-topic span { color:#57606e; margin:0 3px; }
 .post-content h2 { font:600 13px var(--display); margin:7px 0; color:#e5e7ed; }
 .post-content>p { font-size:10px; color:#9aa2af; line-height:1.6; margin:0 0 8px; white-space:pre-wrap; }
-.report-reference { display:inline-block; margin:0 0 9px; color:#b6a7f2; font-size:9px; text-decoration:none; }
+.report-reference { display:inline-block; margin:0 0 9px; padding:0; border:0; background:none; color:#b6a7f2; font:inherit; font-size:9px; text-decoration:none; cursor:pointer; }
 .report-reference:hover { text-decoration:underline; }
 .post-meta { display:flex; align-items:center; gap:6px; font-size:9px; color:#78818f; }
 .mini-avatar { width:18px; height:18px; font-size:8px; background:linear-gradient(135deg,#c8a87b,#8d708f); }

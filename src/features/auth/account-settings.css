@@ -1,0 +1,49 @@
+.account-settings { max-width: 900px; }
+.account-settings .page-heading { margin-bottom: 25px; }
+.settings-card {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 14px;
+  margin-bottom: 14px;
+  padding: 20px;
+  border: 1px solid #282e39;
+  border-radius: 9px;
+  background: #151922;
+}
+.settings-card-icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid #39334e;
+  border-radius: 8px;
+  background: #211e30;
+  color: #b7a9ff;
+}
+.settings-card-content { min-width: 0; }
+.settings-card-content h2 { margin: 1px 0 5px; font: 600 15px var(--display); }
+.settings-card-content p { margin: 0 0 17px; color: #8991a0; font-size: 11px; line-height: 1.55; }
+.settings-field { display: grid; gap: 7px; color: #aeb4c0; font-size: 11px; font-weight: 600; }
+.settings-field select, .settings-field input {
+  width: 100%;
+  min-height: 39px;
+  padding: 8px 10px;
+  border: 1px solid #303744;
+  border-radius: 6px;
+  background: #11151d;
+  color: #eceef3;
+  font-size: 12px;
+}
+.settings-field input[readonly] { color: #9299a7; }
+.settings-email-form { display: grid; max-width: 460px; gap: 13px; }
+.settings-email-form .primary-button { justify-self: start; margin-top: 2px; }
+.settings-account-actions { margin-top: 20px; }
+.settings-message { padding: 12px 14px; border: 1px solid; border-radius: 7px; font-size: 11px; line-height: 1.5; }
+.settings-message.error { border-color: #57313a; background: #321f25; color: #efa09b; }
+.settings-message.success { border-color: #234039; background: #1a2827; color: #80d4bc; }
+
+@media (max-width: 600px) {
+  .settings-card { grid-template-columns: 30px minmax(0, 1fr); gap: 10px; padding: 15px; }
+  .settings-card-icon { width: 30px; height: 30px; }
+  .account-settings .page-heading { align-items: flex-start; gap: 12px; }
+}
