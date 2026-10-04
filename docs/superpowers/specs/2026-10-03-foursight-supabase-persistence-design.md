@@ -13,7 +13,7 @@ Connect FourSight's existing civic reporting and community forum screens to Supa
 ## Decisions and requirements
 
 - Create the Supabase project named `FourSight` in organization `yasirshah-csds`. The connected Supabase tool quoted $0/month; the user confirmed that organization and cost on 2026-10-03.
-- Use Supabase Auth with email and password. Require a non-empty display name and syntactically valid email address at signup. Without mailbox verification, the app can validate address format but cannot prove the address is deliverable or controlled by the user. Disable email confirmation; do not require OTP or email-link verification.
+- Use Supabase Auth with email and password. Require a non-empty display name and syntactically valid email address at signup. Keep Supabase email confirmation enabled; signup sends the user a confirmation link, and the user must open it before signing in. Do not use OTP codes. Email syntax checks alone do not prove an address is deliverable or controlled by the user.
 - Require sign-in to submit reports, start forum discussions, comment, flag content, and use staff controls. Public visitors may view visible reports, status histories, report media intended for public display, and visible forum content without signing in.
 - Public reports may show the reporter's display name. Never include account email in public report, map, forum, or moderation projections. Keep owner identity for authorization and private account management.
 - Replace `localStorage` as the source of persisted app state with Supabase reads/writes. Keep local demo seeds available only in an explicit unconfigured/demo mode; surface backend errors instead of claiming a failed write succeeded.
@@ -42,7 +42,7 @@ Vercel configuration is limited to the app's build/deployment settings and docum
 
 ### Authentication
 
-A visitor can browse public pages. To report or participate, the visitor creates an account with display name, email, and password or signs in with email and password. Client-side email syntax checks provide fast feedback; Supabase Auth remains responsible for account creation and password handling. Email confirmation is disabled in project Auth settings. Since confirmation is disabled by request, syntax validation does not prove mailbox ownership or deliverability. The user's email remains private.
+A visitor can browse public pages. To report or participate, the visitor creates an account with display name, email, and password or signs in with email and password. Client-side email syntax checks provide fast feedback; Supabase Auth remains responsible for account creation and password handling. Keep Supabase email confirmation enabled and require the confirmation link before sign-in; do not use OTP codes. The user's email remains private.
 
 ### Civic reports
 
@@ -80,4 +80,4 @@ Show a clear connection/setup state when Supabase URL/key are missing. In that m
 
 ## Scope boundaries
 
-This change connects the already-built app to Supabase and expands forum coverage. It does not create a live write-back integration to city systems, add OTP/email verification, expose email addresses publicly, or replace Boston 311's separate delivery state. Seeding or granting demo city-admin/moderator roles must use a protected administrative method, not a public signup form.
+This change connects the already-built app to Supabase and expands forum coverage. It does not create a live write-back integration to city systems, add OTP verification, expose email addresses publicly, or replace Boston 311's separate delivery state. Seeding or granting demo city-admin/moderator roles must use a protected administrative method, not a public signup form.
