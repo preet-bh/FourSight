@@ -14,6 +14,31 @@ const reportRow = {
   report_events: [{ status: 'new', note: null, created_at: '2026-09-29T15:20:00.000Z', profiles: { display_name: 'Resident' } }],
 };
 
+function createInsertTestClient() {
+  const inserted: Record<string, Record<string, unknown>> = {};
+  const user = { id: 'account-uuid', email: 'private@example.com', user_metadata: { display_name: 'Avery Civic' } };
+  const client = {
+    auth: { getUser: vi.fn().mockResolvedValue({ data: { user }, error: null }) },
+    from: vi.fn((table: string) => {
+      let payload: Record<string, unknown> = {};
+      const query = {
+        insert: vi.fn((value: Record<string, unknown>) => { payload = value; inserted[table] = value; return query; }),
+        select: vi.fn().mockReturnThis(),
+        single: vi.fn(async () => ({
+          data: table === 'reports'
+            ? { ...reportRow, ...payload, id: 'created-report-uuid', public_id: 'FS-CREATED' }
+            : table === 'forum_posts'
+              ? { id: 'created-post-id', ...payload, created_at: '2026-10-03T12:00:00Z', hidden: false, forum_comments: [] }
+              : { id: 'created-comment-id', ...payload, created_at: '2026-10-03T12:00:00Z' },
+          error: null,
+        })),
+      };
+      return query;
+    }),
+  };
+  return { client: client as unknown as SupabaseClient, inserted, user };
+}
+
 describe('Supabase row mapping', () => {
   it('maps public report labels separately from database UUIDs and strips private fields', () => {
     const report = mapPublicReport(reportRow, []);
@@ -84,5 +109,37 @@ describe('Supabase row mapping', () => {
     expect(rpc).toHaveBeenNthCalledWith(1, 'review_forum_flag', { p_flag_id: 'flag-1', p_action: 'hide' });
     expect(rpc).toHaveBeenNthCalledWith(2, 'review_forum_flag', { p_flag_id: 'flag-1', p_action: 'restore' });
     expect(rpc).toHaveBeenNthCalledWith(3, 'review_forum_flag', { p_flag_id: 'flag-1', p_action: 'dismiss' });
+  });
+});
+
+describe('authenticated display-name persistence', () => {
+  it('uses signup display_name on reports and keeps account email private', async () => {
+    const { client, inserted, user } = createInsertTestClient();
+    const { civic } = createSupabaseDataApis(client);
+    const report = await civic.createReport({
+      title: 'Signal out', description: 'The signal is dark.', category: 'Street & sidewalk',
+      region: 'Boston', location: { lat: 42.35, lng: -71.06 }, media: [],
+    });
+    expect(inserted.reports.reporter_display_name).toBe('Avery Civic');
+    expect(report.reporterName).toBe('Avery Civic');
+    expect(JSON.stringify(report)).not.toContain(user.email);
+  });
+
+  it('uses signup display_name on forum posts and keeps account email private', async () => {
+    const { client, inserted, user } = createInsertTestClient();
+    const { community } = createSupabaseDataApis(client);
+    const post = await community.createPost({ region: 'Boston', topic: 'Safety', title: 'Signal out', body: 'The signal is dark.' });
+    expect(inserted.forum_posts.author_display_name).toBe('Avery Civic');
+    expect(post.author).toBe('Avery Civic');
+    expect(JSON.stringify(post)).not.toContain(user.email);
+  });
+
+  it('uses signup display_name on forum comments and keeps account email private', async () => {
+    const { client, inserted, user } = createInsertTestClient();
+    const { community } = createSupabaseDataApis(client);
+    const comment = await community.addComment('post-id', 'I will follow up.');
+    expect(inserted.forum_comments.author_display_name).toBe('Avery Civic');
+    expect(comment.author).toBe('Avery Civic');
+    expect(JSON.stringify(comment)).not.toContain(user.email);
   });
 });

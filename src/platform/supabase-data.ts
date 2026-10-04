@@ -91,6 +91,10 @@ async function authenticatedUser(client: SupabaseClient) {
   return data.user;
 }
 
+function displayNameForUser(user: { user_metadata?: Record<string, unknown> | null }): string {
+  return String(user.user_metadata?.display_name ?? '').trim() || 'Resident';
+}
+
 async function loadAssociations(client: SupabaseClient, rows: DbRow[]) {
   const ids = rows.map((row) => String(row.id));
   if (!ids.length) return { media: [] as DbRow[], events: [] as DbRow[], deliveries: [] as DbRow[] };
@@ -193,7 +197,7 @@ export function createSupabaseDataApis(client: SupabaseClient): { civic: CivicDa
     },
     async createReport(input) {
       const user = await authenticatedUser(client);
-      const reporterName = String(user.user_metadata?.name ?? '').trim() || 'Resident';
+      const reporterName = displayNameForUser(user);
       const publicId = `FS-${Date.now().toString(36).toUpperCase()}-${crypto.randomUUID().slice(0, 5).toUpperCase()}`;
       const row = await dataOrThrow<DbRow>(client.from('reports').insert({
         public_id: publicId, owner_id: user.id, reporter_display_name: reporterName,
@@ -239,13 +243,13 @@ export function createSupabaseDataApis(client: SupabaseClient): { civic: CivicDa
         if (!report) throw new Error('The linked report is unavailable.');
         reportUuid = report.id;
       }
-      const authorName = String(user.user_metadata?.name ?? '').trim() || 'Resident';
+      const authorName = displayNameForUser(user);
       const row = await dataOrThrow<DbRow>(client.from('forum_posts').insert({ region: input.region, topic: input.topic, title: input.title, body: input.body, report_id: reportUuid, author_id: user.id, author_display_name: authorName }).select(POST_FIELDS).single());
       return mapCommunityPost({ ...row, report_public_id: input.reportId ?? null });
     },
     async addComment(postId, body) {
       const user = await authenticatedUser(client);
-      const authorName = String(user.user_metadata?.name ?? '').trim() || 'Resident';
+      const authorName = displayNameForUser(user);
       const row = await dataOrThrow<DbRow>(client.from('forum_comments').insert({ post_id: postId, author_id: user.id, body, author_display_name: authorName }).select('id,post_id,body,created_at,author_display_name').single());
       return { id: row.id, body: row.body, author: row.author_display_name || 'Resident', at: row.created_at, hidden: false };
     },
