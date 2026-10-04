@@ -40,7 +40,7 @@ serve(async (request) => {
   const adminClient = createClient(supabaseUrl, serviceKey);
   const { data: report, error: reportError } = await adminClient
     .from('reports')
-    .select('id,owner_id,region,description,confirmed_transcript,latitude,longitude,category')
+    .select('id,owner_id,region,description,latitude,longitude,category')
     .eq('id', body.reportId)
     .maybeSingle();
   if (reportError) return reply({ error: 'Could not verify the saved report.' }, 500);
@@ -144,8 +144,8 @@ serve(async (request) => {
     mediaUrl = data.signedUrl;
   }
 
-  const description = report.confirmed_transcript?.trim() || report.description.trim();
-  if (!description) return saveFailure(adminClient, report.id, 'The saved report has no confirmed transcript or typed description; no city request was sent.');
+  const description = report.description.trim();
+  if (!description) return saveFailure(adminClient, report.id, 'The saved report has no summary description; no city request was sent.');
   const form = new URLSearchParams({
     service_code: serviceCode,
     lat: String(report.latitude),

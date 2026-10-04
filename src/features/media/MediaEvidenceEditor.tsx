@@ -8,25 +8,11 @@ export type MediaEvidenceDraft = {
   selectedFrameFile: File | null;
   selectedFrameSeconds: number | null;
   description: string;
-  transcriptDraft: string;
-  transcriptConfirmed: boolean;
-  confirmedTranscript: string;
 };
 
 type Props = {
   onChange: (draft: MediaEvidenceDraft) => void;
   disabled?: boolean;
-};
-
-const emptyDraft: MediaEvidenceDraft = {
-  mediaFile: null,
-  mediaKind: null,
-  selectedFrameFile: null,
-  selectedFrameSeconds: null,
-  description: '',
-  transcriptDraft: '',
-  transcriptConfirmed: false,
-  confirmedTranscript: '',
 };
 
 export default function MediaEvidenceEditor({ onChange, disabled = false }: Props) {
@@ -39,7 +25,6 @@ export default function MediaEvidenceEditor({ onChange, disabled = false }: Prop
   const [frameFile, setFrameFile] = useState<File | null>(null);
   const [description, setDescription] = useState('');
   const [transcript, setTranscript] = useState('');
-  const [transcriptConfirmed, setTranscriptConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -63,11 +48,8 @@ export default function MediaEvidenceEditor({ onChange, disabled = false }: Prop
       selectedFrameFile: frameFile,
       selectedFrameSeconds: frameFile ? selectedFrameSeconds : null,
       description,
-      transcriptDraft: transcript,
-      transcriptConfirmed: Boolean(transcript.trim()) && transcriptConfirmed,
-      confirmedTranscript: transcript.trim() && transcriptConfirmed ? transcript.trim() : '',
     });
-  }, [description, file, frameFile, frameSeconds, kind, selectedFrameSeconds, transcript, transcriptConfirmed]);
+  }, [description, file, frameFile, frameSeconds, kind, selectedFrameSeconds]);
 
   const chooseFile = async (next: File | null) => {
     if (!next) return;
@@ -83,7 +65,6 @@ export default function MediaEvidenceEditor({ onChange, disabled = false }: Prop
       setSelectedFrameSeconds(null);
       setFrameFile(null);
       setTranscript('');
-      setTranscriptConfirmed(false);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not use this media file.');
     } finally {
@@ -99,7 +80,6 @@ export default function MediaEvidenceEditor({ onChange, disabled = false }: Prop
     setSelectedFrameSeconds(null);
     setFrameFile(null);
     setTranscript('');
-    setTranscriptConfirmed(false);
   };
 
   const captureFrame = async () => {
@@ -167,8 +147,7 @@ export default function MediaEvidenceEditor({ onChange, disabled = false }: Prop
     try {
       const text = await requestTranscript(file);
       setTranscript(text);
-      setTranscriptConfirmed(false);
-      setMessage(text ? 'Transcript ready. Edit it if needed, then confirm it.' : 'No speech was detected. Add a typed description instead.');
+      setMessage(text ? 'Temporary transcript ready. Use it as a reference to write a concise summary below.' : 'No speech was detected. Add a typed summary instead.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Transcription is unavailable. Add a typed description instead.');
     } finally {
@@ -224,38 +203,31 @@ export default function MediaEvidenceEditor({ onChange, disabled = false }: Prop
         </div>
       )}
       {kind === 'video' && transcript && (
-        <label>
-          Edit transcript
-          <textarea
-            value={transcript}
-            disabled={disabled || busy}
-            onChange={event => { setTranscript(event.currentTarget.value); setTranscriptConfirmed(false); }}
-          />
+        <div>
           <label>
-            <input
-              type="checkbox"
-              checked={transcriptConfirmed}
-              disabled={disabled || busy || !transcript.trim()}
-              onChange={event => setTranscriptConfirmed(event.currentTarget.checked)}
+            Temporary transcript (not saved)
+            <textarea
+              value={transcript}
+              disabled={disabled || busy}
+              onChange={event => setTranscript(event.currentTarget.value)}
             />
-            I reviewed and confirm this transcript
           </label>
-        </label>
+          <p>Use the transcript as a reference; only the summary you write below is included in the report.</p>
+        </div>
       )}
       <label>
-        Typed description (available even when transcription is unavailable)
+        Summary report (this is saved and forwarded)
         <textarea
           value={description}
           maxLength={1200}
           disabled={disabled}
+          placeholder="Summarize the issue shown in the video. If transcription is unavailable or there is no speech, describe what the video shows."
           onChange={event => setDescription(event.currentTarget.value)}
         />
       </label>
       {message && <p role="status">{message}</p>}
-      <p>Save the FourSight report before calling `forwardSavedReportToBoston` with its persisted id.</p>
+      <p>Transcription is temporary and stays in this editor. Save the FourSight report before calling `forwardSavedReportToBoston` with its persisted id.</p>
       {file && <p>Attached {kind} stays in FourSight; the selected frame is separate evidence for city forwarding.</p>}
     </section>
   );
 }
-
-export { emptyDraft };
