@@ -64,6 +64,7 @@ type NewReportInput = Pick<Report, 'title' | 'description' | 'category' | 'regio
 type CommunityComment = { id: string; body: string; author: string; at: string; hidden: boolean };
 type CommunityPost = Omit<ForumPost, 'comments'> & { reportId: string | null; comments: CommunityComment[] };
 type ModerationTarget = { kind: 'post' | 'comment'; id: string };
+type ModerationFlag = { id: string; target: ModerationTarget; region: string; contentPreview: string; reason: string | null; createdAt: string };
 
 interface AuthApi {
   getState(): Promise<AuthState>;
@@ -88,6 +89,7 @@ interface CommunityDataApi {
   createPost(input: { region: string; topic: string; title: string; body: string; reportId?: string }): Promise<CommunityPost>;
   addComment(postId: string, body: string): Promise<CommunityComment>;
   flagContent(target: ModerationTarget, reason?: string): Promise<void>;
+  listModerationFlags(region: string): Promise<ModerationFlag[]>;
   reviewFlag(flagId: string, action: 'hide' | 'restore' | 'dismiss'): Promise<void>;
   subscribeCommunity(region: string, listener: (posts: CommunityPost[]) => void): () => void;
 }
