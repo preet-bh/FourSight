@@ -80,12 +80,16 @@ export function createAuthApi(client: SupabaseClient | null = supabase): AuthApi
       const displayName = input.displayName.trim();
       if (!displayName) throw new Error('Enter your display name.');
       if (!validateEmail(input.email)) throw new Error('Enter a valid email address.');
-      if (!input.password) throw new Error('Enter a password.');
+      if (input.password.length < 6) throw new Error('Use a password with at least 6 characters.');
       const { error } = await requiredClient(client).auth.signUp({
         email: input.email.trim(),
         password: input.password,
         options: { data: { display_name: displayName } },
       });
+      if (error?.code === 'over_email_send_rate_limit') {
+        throw new Error('Confirmation emails are temporarily at capacity. Please try again later. If you already received a confirmation email, use its link to activate your account.');
+      }
+      if (error?.status === 429) throw new Error('Too many account attempts. Please wait a few minutes before trying again.');
       if (error) throw error;
       return { confirmationRequired: true };
     },

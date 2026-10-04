@@ -69,7 +69,7 @@ export default function AuthPanel({ authApi }: AuthPanelProps) {
     <form className="auth-form" onSubmit={submit}>
       {mode === 'sign_up' && <label>Display name<input required autoComplete="name" value={displayName} onChange={event => setDisplayName(event.target.value)} maxLength={80} /></label>}
       <label>Email address<input required type="email" autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} /></label>
-      <label>Password<input required type="password" autoComplete={mode === 'sign_up' ? 'new-password' : 'current-password'} value={password} onChange={event => setPassword(event.target.value)} /></label>
+      <label>Password<input required type="password" autoComplete={mode === 'sign_up' ? 'new-password' : 'current-password'} minLength={mode === 'sign_up' ? 6 : undefined} value={password} onChange={event => setPassword(event.target.value)} /></label>
       <button className="auth-submit" type="submit" disabled={busy}>{busy ? 'Please wait…' : mode === 'sign_up' ? 'Create account' : 'Sign in'}</button>
     </form>
     {notice && <p className="auth-notice" role="status" aria-live="polite">{notice}</p>}

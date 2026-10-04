@@ -19,6 +19,10 @@ Run checks with `npm test` and `npm run build`.
 
 Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in `.env.local` for a connected app. Never put server secrets in `VITE_` variables. The resident map and forum remain readable without signing in; creating reports or participating in forum discussions requires an account. Public reports show the resident's chosen display name but never their email. Supabase Auth email confirmation remains enabled.
 
+### Signup email capacity
+
+The FourSight Supabase project's custom SMTP switch is currently off. Supabase's built-in email sender allows only two Auth emails per hour per project and limits delivery to project team addresses, so it cannot support public signup with email confirmation. Configure an SMTP provider under [Authentication → Emails → SMTP Settings](https://supabase.com/dashboard/project/ahtikaimxxihoecopfzr/auth/smtp) using a verified sender address and the provider's SMTP host, port, username, and password. Keep email confirmation enabled. Once SMTP is saved, review [Authentication → Rate Limits](https://supabase.com/dashboard/project/ahtikaimxxihoecopfzr/auth/rate-limits) and set the email quota to match the provider's allowed throughput. The default custom SMTP limit is 30 emails per hour. Store SMTP credentials only in Supabase settings, never in this repository or a `VITE_` variable. Confirm delivery to an address outside the Supabase project team before opening public signup.
+
 The old single-file prototype remains at [`foursight.html`](./foursight.html) for reference. The new app is under `src/`.
 
 ## Supabase setup foundations
