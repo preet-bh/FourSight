@@ -12,7 +12,7 @@
 
 ## Verification
 
-- Tests-first evidence: the initial focused run failed all four tests because the adapter exports did not yet exist. Final `npm test -- --run src/platform/data.test.ts`: **4 passed**.
+- Tests-first evidence: the initial focused run failed all four tests because the adapter exports did not yet exist. The current focused suite also covers hidden flags remaining in the active queue and all moderator decisions going through the guarded RPC; final result recorded below.
 - `npx tsc --noEmit -p tsconfig.json`: passed.
 - `npm run build`: passed (`tsc -b` and Vite production build).
 - `git diff --check`: passed.
@@ -24,5 +24,15 @@
 
 ## Concerns
 
-- Supabase CLI could not authenticate in this checkout (`AccessTokenRequiredError`), so migrations were applied through the connected Supabase MCP. Its API records generated remote versions instead of the checked-in versions. Reconcile migration history before a future `supabase db push` so it does not treat the checked-in migrations as unapplied.
+- Supabase CLI could not authenticate in this checkout (`AccessTokenRequiredError`), so migrations were applied through the connected Supabase MCP. The filenames have since been reconciled with the recorded remote versions.
 - `private.can_view_report_media()` must remain executable by `anon` and `authenticated` for the Storage policy to invoke it. It is SECURITY INVOKER in the unexposed `private` schema, not a public Data API RPC.
+
+## Security review round 1
+
+- Preserved the four applied baseline migration bodies (including only the previously approved helper-order correction in `initial.sql`) and renamed their tracked files to match remote migration history. The remotely applied security review migration is tracked as `20261004010845_security_review_round_1.sql`; its SQL is unchanged after application. A follow-up `20261004011210_moderation_review_index.sql` adds the advisor-requested `forum_flag_reviews(reviewed_by)` index and was applied successfully.
+- Anonymous-role transaction checks with temporary fixtures passed for visible versus hidden reports, report media metadata, Storage objects, forum posts, and comments. No `current_app_role()` permission errors occurred, visible rows were readable, and hidden rows were not exposed. Fixture transaction was rolled back.
+- Authenticated-role checks with temporary resident/moderator fixtures passed: cross-owner report-media storage paths were rejected; direct moderator UPDATE of a post was denied; `review_forum_flag` hid a post and retained its flag in the active queue, restored the same target and closed the flag, dismissed a separate flag without changing target visibility, and hid/restored a comment. Five append-only review rows were present for the five successful decisions. Fixture transaction was rolled back.
+- Post-migration privilege checks confirmed authenticated lacks UPDATE on forum posts, forum flags, and comment visibility. Remote migration history is now reconciled exactly through `20261004011210 moderation_review_index`.
+- Security advisor after these migrations reports only six authenticated SECURITY DEFINER functions, all role-guarded: the four existing admin RPCs, `current_app_role`, and `review_forum_flag`. There are no anonymous SECURITY DEFINER warnings. Performance advisor no longer reports an unindexed foreign key; its 22 unused-index INFO notices are expected on the empty project.
+- Remote migration apply outcomes: `security_review_round_1` succeeded at `20261004010845`; `moderation_review_index` succeeded at `20261004011210`. A first disposable fixture attempt failed its input check because the hidden-report test row omitted required hide metadata; the transaction rolled back. The corrected anon and moderator fixture batches both passed and rolled back cleanly.
+- Local verification after round 1: `npm test` passed (3 files, 13 tests); `npm run build` passed (`tsc -b` and Vite production build); `git diff --check` passed (Git printed only line-ending normalization warnings for the report and test file).

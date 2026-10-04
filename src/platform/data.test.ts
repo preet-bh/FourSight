@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { mapPublicReport, mapStaffReport, mapCommunityPost, throwOnBackendError } from './data';
+import { describe, expect, it, vi } from 'vitest';
+import { createSupabaseDataApis, mapPublicReport, mapStaffReport, mapCommunityPost, throwOnBackendError } from './data';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 const reportRow = {
   id: 'db-uuid', public_id: 'FS-2048', reporter_display_name: 'Jordan R.',
@@ -59,5 +60,29 @@ describe('Supabase row mapping', () => {
   it('surfaces Supabase query errors instead of treating them as empty data', () => {
     expect(() => throwOnBackendError({ message: 'denied', code: '42501' })).toThrow('denied');
     expect(() => throwOnBackendError(null)).not.toThrow();
+  });
+
+  it('keeps hidden flags in the active moderation query for later restoration', async () => {
+    const query = {
+      select: vi.fn().mockReturnThis(),
+      in: vi.fn().mockReturnThis(),
+      order: vi.fn().mockResolvedValue({ data: [], error: null }),
+    };
+    const client = { from: vi.fn().mockReturnValue(query) } as unknown as SupabaseClient;
+    const { community } = createSupabaseDataApis(client);
+    await community.listModerationFlags('Boston');
+    expect(query.in).toHaveBeenCalledWith('action', ['pending', 'hidden']);
+  });
+
+  it('routes moderation hide, restore, and dismiss through the guarded database RPC', async () => {
+    const rpc = vi.fn().mockResolvedValue({ error: null });
+    const client = { rpc } as unknown as SupabaseClient;
+    const { community } = createSupabaseDataApis(client);
+    await community.reviewFlag('flag-1', 'hide');
+    await community.reviewFlag('flag-1', 'restore');
+    await community.reviewFlag('flag-1', 'dismiss');
+    expect(rpc).toHaveBeenNthCalledWith(1, 'review_forum_flag', { p_flag_id: 'flag-1', p_action: 'hide' });
+    expect(rpc).toHaveBeenNthCalledWith(2, 'review_forum_flag', { p_flag_id: 'flag-1', p_action: 'restore' });
+    expect(rpc).toHaveBeenNthCalledWith(3, 'review_forum_flag', { p_flag_id: 'flag-1', p_action: 'dismiss' });
   });
 });
