@@ -53,13 +53,24 @@ export function canModerateCommunity(session: AuthState): boolean {
     && (session.user?.role === 'moderator' || session.user?.role === 'city_admin');
 }
 
+const SIGN_IN_PROMPT = 'Sign in to post, reply, or flag community content.';
+
+export function canParticipateCommunity(session: AuthState): boolean {
+  return session.status === 'demo' || (session.status === 'signed_in' && session.user !== null);
+}
+
+function requireCommunityParticipation(session: AuthState): void {
+  if (!canParticipateCommunity(session)) throw new Error('Sign in to participate in the neighborhood forum.');
+}
+
 export function filterCommunityPosts(posts: CommunityPost[], region: string, topic: string, includeHidden: boolean): CommunityPost[] {
   return posts.filter(post => post.region === region
     && (topic === 'All topics' || post.topic === topic)
     && (includeHidden || !post.hidden));
 }
 
-export async function submitCommunityPost(api: CommunityDataApi, region: string, draft: PostDraft): Promise<CommunityPost> {
+export async function submitCommunityPost(api: CommunityDataApi, session: AuthState, region: string, draft: PostDraft): Promise<CommunityPost> {
+  requireCommunityParticipation(session);
   const title = draft.title.trim();
   const body = draft.body.trim();
   if (!title || !body) throw new Error('Add a title and message before posting.');
@@ -67,13 +78,15 @@ export async function submitCommunityPost(api: CommunityDataApi, region: string,
   return api.createPost({ region, topic: draft.topic, title, body, ...(reportId ? { reportId } : {}) });
 }
 
-export async function submitCommunityComment(api: CommunityDataApi, postId: string, body: string): Promise<CommunityComment> {
+export async function submitCommunityComment(api: CommunityDataApi, session: AuthState, postId: string, body: string): Promise<CommunityComment> {
+  requireCommunityParticipation(session);
   const trimmedBody = body.trim();
   if (!trimmedBody) throw new Error('Add a message before replying.');
   return api.addComment(postId, trimmedBody);
 }
 
-export async function flagCommunityContent(api: CommunityDataApi, target: { kind: 'post' | 'comment'; id: string }): Promise<void> {
+export async function flagCommunityContent(api: CommunityDataApi, session: AuthState, target: { kind: 'post' | 'comment'; id: string }): Promise<void> {
+  requireCommunityParticipation(session);
   await api.flagContent(target);
 }
 
@@ -91,6 +104,7 @@ const emptyDraft = (): PostDraft => ({ topic: 'Cost of living', title: '', body:
 
 export function ForumPage({ api, session, region }: ForumPageProps) {
   const moderator = canModerateCommunity(session);
+  const canParticipate = canParticipateCommunity(session);
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [moderationFlags, setModerationFlags] = useState<ModerationFlag[]>([]);
   const [loading, setLoading] = useState(true);
@@ -156,7 +170,7 @@ export function ForumPage({ api, session, region }: ForumPageProps) {
     setBusy(true);
     setError('');
     try {
-      const created = await submitCommunityPost(api, region, draft);
+      const created = await submitCommunityPost(api, session, region, draft);
       setPosts(current => [created, ...current.filter(post => post.id !== created.id)]);
       setDraft(emptyDraft());
       setShowComposer(false);
@@ -172,7 +186,7 @@ export function ForumPage({ api, session, region }: ForumPageProps) {
     setBusy(true);
     setError('');
     try {
-      const comment = await submitCommunityComment(api, postId, commentDraft);
+      const comment = await submitCommunityComment(api, session, postId, commentDraft);
       setPosts(current => current.map(post => post.id === postId
         ? { ...post, comments: reconcileCommunityComments(post.comments, comment) }
         : post));
@@ -189,7 +203,7 @@ export function ForumPage({ api, session, region }: ForumPageProps) {
   const flagContent = async (target: { kind: 'post' | 'comment'; id: string }) => {
     setError('');
     try {
-      await flagCommunityContent(api, target);
+      await flagCommunityContent(api, session, target);
       await refresh();
       setNotice('Flag sent to moderators for review.');
     } catch (cause) {
@@ -217,7 +231,7 @@ export function ForumPage({ api, session, region }: ForumPageProps) {
         <h1>Better, together.</h1>
         <p>Talk about the changes that make our neighborhoods work.</p>
       </div>
-      <button className="primary-button" onClick={() => setShowComposer(true)}><Plus size={16}/> Start a discussion</button>
+      <button className="primary-button" onClick={() => canParticipate ? setShowComposer(true) : setNotice(SIGN_IN_PROMPT)}><Plus size={16}/> Start a discussion</button>
     </header>
 
     <section className="forum-banner" aria-label="Neighborhood forum overview">
@@ -232,6 +246,8 @@ export function ForumPage({ api, session, region }: ForumPageProps) {
       </div>
       {moderator && <button className={`secondary-button ${showModeration ? 'selected-filter' : ''}`} aria-pressed={showModeration} onClick={() => setShowModeration(value => !value)}><Shield size={14}/>{showModeration ? 'Hide moderation queue' : 'Moderation queue'} <span className="flag-count">{visibleModerationFlags.length}</span></button>}
     </div>
+
+    {!canParticipate && <p className="forum-signin-prompt" role="status">{SIGN_IN_PROMPT} Use Sign in in the header to join the conversation.</p>}
 
     {error && <div className="forum-error" role="alert"><span>{error}</span><button className="secondary-button" onClick={() => void refresh()}>Try again</button></div>}
     {notice && <div className="forum-notice" role="status">{notice}<button aria-label="Dismiss notice" onClick={() => setNotice('')}><X size={14}/></button></div>}
@@ -260,18 +276,22 @@ export function ForumPage({ api, session, region }: ForumPageProps) {
               <p>{post.body}</p>
               {post.reportId && <a className="report-reference" href={`#report-${encodeURIComponent(post.reportId)}`}>Discussing report {post.reportId}</a>}
               <div className="post-meta"><div className="mini-avatar" aria-hidden="true">{post.author.slice(0, 1)}</div><span>{post.author}</span><span>·</span><time dateTime={post.at}>{new Date(post.at).toLocaleDateString()}</time>
-                <button onClick={() => { setCommenting(commenting === post.id ? null : post.id); setCommentDraft(''); }}><MessageCircle size={14}/>{post.comments.length} replies</button>
-                <button onClick={() => void flagContent({ kind: 'post', id: post.id })}><Flag size={13}/>Flag</button>
+                <button onClick={() => {
+                  if (!canParticipate) { setNotice(SIGN_IN_PROMPT); return; }
+                  setCommenting(commenting === post.id ? null : post.id);
+                  setCommentDraft('');
+                }}><MessageCircle size={14}/>{post.comments.length} replies</button>
+                {canParticipate && <button onClick={() => void flagContent({ kind: 'post', id: post.id })}><Flag size={13}/>Flag</button>}
               </div>
-              {commenting === post.id && <div className="comment-box"><input value={commentDraft} onChange={event => setCommentDraft(event.target.value)} placeholder="Add a thoughtful reply…" aria-label="Your reply"/><button className="primary-button" disabled={busy} onClick={() => void postComment(post.id)}>Reply <Send size={13}/></button></div>}
+              {canParticipate && commenting === post.id && <div className="comment-box"><input value={commentDraft} onChange={event => setCommentDraft(event.target.value)} placeholder="Add a thoughtful reply…" aria-label="Your reply"/><button className="primary-button" disabled={busy} onClick={() => void postComment(post.id)}>Reply <Send size={13}/></button></div>}
               {post.comments.filter(comment => !comment.hidden || (moderator && showModeration)).map(comment => <div className={`comment-item ${comment.hidden ? 'hidden-comment' : ''}`} key={comment.id}>
-                <div className="mini-avatar" aria-hidden="true">{comment.author.slice(0, 1)}</div><div><strong>{comment.author}</strong><time dateTime={comment.at}>{new Date(comment.at).toLocaleDateString()}</time><p>{comment.body}</p><button className="comment-flag" onClick={() => void flagContent({ kind: 'comment', id: comment.id })}><Flag size={12}/> Flag reply</button></div>
+                <div className="mini-avatar" aria-hidden="true">{comment.author.slice(0, 1)}</div><div><strong>{comment.author}</strong><time dateTime={comment.at}>{new Date(comment.at).toLocaleDateString()}</time><p>{comment.body}</p>{canParticipate && <button className="comment-flag" onClick={() => void flagContent({ kind: 'comment', id: comment.id })}><Flag size={12}/> Flag reply</button>}</div>
               </div>)}
             </div>
           </article>)}
     </section>
 
-    {showComposer && <div className="modal-backdrop"><section className="small-modal compose-modal" role="dialog" aria-modal="true" aria-labelledby="compose-heading">
+    {showComposer && canParticipate && <div className="modal-backdrop"><section className="small-modal compose-modal" role="dialog" aria-modal="true" aria-labelledby="compose-heading">
       <button className="modal-close" aria-label="Close composer" onClick={() => setShowComposer(false)}><X size={16}/></button>
       <div className="eyebrow">NEIGHBORHOOD FORUM</div><h2 id="compose-heading">Start a discussion</h2><p>Share a question or an idea with your neighbors.</p>
       <label className="field-label">Topic<select value={draft.topic} onChange={event => setDraft(value => ({ ...value, topic: event.target.value as PostDraft['topic'] }))}>{COMMUNITY_TOPICS.slice(1).map(item => <option key={item} value={item}>{item}</option>)}</select></label>

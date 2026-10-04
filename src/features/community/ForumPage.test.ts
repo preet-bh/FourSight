@@ -14,6 +14,7 @@ import {
   loadCommunitySnapshot,
   reconcileCommunityComments,
   isModeratedTargetHidden,
+  canParticipateCommunity,
 } from './ForumPage';
 
 const makePost = (overrides: Partial<CommunityPost> = {}): CommunityPost => ({
@@ -22,6 +23,8 @@ const makePost = (overrides: Partial<CommunityPost> = {}): CommunityPost => ({
   ...overrides,
 });
 const signedIn = (role: 'resident' | 'moderator' | 'city_admin'): AuthState => ({ status: 'signed_in', user: { id: 'u1', displayName: 'Alex', role } });
+const signedOut: AuthState = { status: 'signed_out', user: null };
+const loading: AuthState = { status: 'loading', user: null };
 const makeFlag = (overrides: Partial<ModerationFlag> = {}): ModerationFlag => ({
   id: 'flag-1', target: { kind: 'post', id: 'post-1' }, region: 'Boston', contentPreview: 'Street lights', reason: 'Needs review', createdAt: '2026-10-01T01:00:00Z', ...overrides,
 });
@@ -76,7 +79,7 @@ describe('community forum', () => {
     let resolveComment!: (comment: { id: string; body: string; author: string; at: string; hidden: boolean }) => void;
     vi.mocked(api.addComment).mockReturnValue(new Promise(resolve => { resolveComment = resolve; }));
     let comments: { id: string; body: string; author: string; at: string; hidden: boolean }[] = [];
-    const pending = submitCommunityComment(api, 'post-1', 'I agree.').then(returned => {
+    const pending = submitCommunityComment(api, signedIn('resident'), 'post-1', 'I agree.').then(returned => {
       comments = reconcileCommunityComments(comments, returned);
     });
     const subscribed = { id: 'c1', body: 'I agree.', author: 'Alex', at: 'now', hidden: false };
@@ -96,22 +99,48 @@ describe('community forum', () => {
     expect(isModeratedTargetHidden(postFlag, [makePost()])).toBe(false);
   });
 
+  it('allows participation for signed-in and local demo sessions only', () => {
+    expect(canParticipateCommunity(signedOut)).toBe(false);
+    expect(canParticipateCommunity(loading)).toBe(false);
+    expect(canParticipateCommunity(signedIn('resident'))).toBe(true);
+    expect(canParticipateCommunity({ status: 'demo', user: null })).toBe(true);
+  });
+
+  it('blocks signed-out post, comment, and flag API calls', async () => {
+    const api = apiStub();
+    await expect(submitCommunityPost(api, signedOut, 'Boston', { topic: 'Cost of living', title: 'Bills', body: 'Rising bills', reportId: '' })).rejects.toThrow('Sign in to participate in the neighborhood forum.');
+    await expect(submitCommunityComment(api, signedOut, 'post-1', 'I agree.')).rejects.toThrow('Sign in to participate in the neighborhood forum.');
+    await expect(flagCommunityContent(api, signedOut, { kind: 'post', id: 'post-1' })).rejects.toThrow('Sign in to participate in the neighborhood forum.');
+    await expect(submitCommunityPost(api, loading, 'Boston', { topic: 'Cost of living', title: 'Bills', body: 'Rising bills', reportId: '' })).rejects.toThrow('Sign in to participate in the neighborhood forum.');
+    await expect(submitCommunityComment(api, loading, 'post-1', 'I agree.')).rejects.toThrow('Sign in to participate in the neighborhood forum.');
+    await expect(flagCommunityContent(api, loading, { kind: 'post', id: 'post-1' })).rejects.toThrow('Sign in to participate in the neighborhood forum.');
+    expect(api.createPost).not.toHaveBeenCalled();
+    expect(api.addComment).not.toHaveBeenCalled();
+    expect(api.flagContent).not.toHaveBeenCalled();
+  });
+
   it('creates a post through the API with its region and optional report reference', async () => {
     const api = apiStub();
-    await submitCommunityPost(api, 'Boston', { topic: 'Report discussion', title: '  Lights out  ', body: '  Please repair them. ', reportId: ' FS-2048 ' });
+    await submitCommunityPost(api, signedIn('resident'), 'Boston', { topic: 'Report discussion', title: '  Lights out  ', body: '  Please repair them. ', reportId: ' FS-2048 ' });
     expect(api.createPost).toHaveBeenCalledWith({ region: 'Boston', topic: 'Report discussion', title: 'Lights out', body: 'Please repair them.', reportId: 'FS-2048' });
+  });
+
+  it('keeps local demo participation enabled', async () => {
+    const api = apiStub();
+    await submitCommunityPost(api, { status: 'demo', user: null }, 'Boston', { topic: 'Cost of living', title: 'Bills', body: 'Local demo post', reportId: '' });
+    expect(api.createPost).toHaveBeenCalledWith({ region: 'Boston', topic: 'Cost of living', title: 'Bills', body: 'Local demo post' });
   });
 
   it('submits comments through the API after trimming the body', async () => {
     const api = apiStub();
-    await submitCommunityComment(api, 'post-1', '  I agree.  ');
+    await submitCommunityComment(api, signedIn('resident'), 'post-1', '  I agree.  ');
     expect(api.addComment).toHaveBeenCalledWith('post-1', 'I agree.');
   });
 
   it('flags both posts and comments through the API', async () => {
     const api = apiStub();
-    await flagCommunityContent(api, { kind: 'post', id: 'post-1' });
-    await flagCommunityContent(api, { kind: 'comment', id: 'comment-1' });
+    await flagCommunityContent(api, signedIn('resident'), { kind: 'post', id: 'post-1' });
+    await flagCommunityContent(api, signedIn('resident'), { kind: 'comment', id: 'comment-1' });
     expect(api.flagContent).toHaveBeenNthCalledWith(1, { kind: 'post', id: 'post-1' });
     expect(api.flagContent).toHaveBeenNthCalledWith(2, { kind: 'comment', id: 'comment-1' });
   });
@@ -136,5 +165,13 @@ describe('community forum', () => {
     const moderatorHtml = renderToStaticMarkup(createElement(ForumPage, { api, session: signedIn('moderator'), region: 'Boston' }));
     expect(residentHtml).not.toContain('Moderation queue');
     expect(moderatorHtml).toContain('Moderation queue');
+  });
+
+  it('keeps read access and shows a participation prompt when signed out', () => {
+    const api = apiStub();
+    const html = renderToStaticMarkup(createElement(ForumPage, { api, session: signedOut, region: 'Boston' }));
+    expect(html).toContain('Sign in to post, reply, or flag community content.');
+    expect(html).toContain('Better, together.');
+    expect(html).not.toContain('>Flag</button>');
   });
 });

@@ -42,6 +42,7 @@
 .hidden-post { opacity:.7; border-color:#563537; }
 .forum-empty { padding:25px 15px; text-align:center; font-size:11px; color:#7f8795; }
 .forum-error,.forum-notice { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 12px; padding:10px 12px; border-radius:6px; font-size:10px; }
+.forum-signin-prompt { margin:0 0 12px; padding:10px 12px; border:1px solid #48415f; border-radius:6px; background:#211f2d; color:#c8bdf4; font-size:10px; line-height:1.5; }
 .forum-error { color:#efb0a9; background:#302126; border:1px solid #634044; }
 .forum-notice { color:#b9d6c7; background:#1c2b25; border:1px solid #355345; }
 .forum-notice button { border:0; background:none; color:inherit; display:grid; place-items:center; }
