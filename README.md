@@ -39,7 +39,7 @@ Server-only secrets for Supabase Edge Functions:
 - `BOS_311_ENDPOINT` (approved Open311 endpoint)
 - `BOS_311_BOUNDARY_GEOJSON` (verified City of Boston Polygon/MultiPolygon GeoJSON; outside-boundary locations stay sandboxed)
 - `BOS_311_API_KEY`
-- `BOS_311_SERVICE_CODE_STREET_SIDEWALK`, `BOS_311_SERVICE_CODE_TRASH_SANITATION`, `BOS_311_SERVICE_CODE_LIGHTING`, `BOS_311_SERVICE_CODE_PARKS`, `BOS_311_SERVICE_CODE_WATER_DRAINAGE`, `BOS_311_SERVICE_CODE_PUBLIC_SAFETY`, and `BOS_311_SERVICE_CODE_OTHER`. Set only mappings verified against the approved BOS:311 catalog.
+- `BOS_311_SERVICE_CODE_STREET_SIDEWALK`, `BOS_311_SERVICE_CODE_TRASH_SANITATION`, `BOS_311_SERVICE_CODE_LIGHTING`, `BOS_311_SERVICE_CODE_PARKS`, `BOS_311_SERVICE_CODE_WATER_DRAINAGE`, `BOS_311_SERVICE_CODE_PUBLIC_SAFETY`, and `BOS_311_SERVICE_CODE_OTHER`; each needs a paired `BOS_311_SERVICE_NAME_<CATEGORY>` value (for example, `BOS_311_SERVICE_NAME_STREET_SIDEWALK`). Set only exact code/name pairs verified against the approved BOS:311 catalog.
 
 `forward-to-boston` expects a saved Supabase report UUID and authenticated owner. Boston submissions are attempted only after the FourSight ticket is saved; other regions are not sent to Boston. Delivery status is separate from the FourSight ticket status. The local demo never sends city requests.
 
