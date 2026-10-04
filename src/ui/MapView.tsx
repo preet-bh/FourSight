@@ -2,13 +2,14 @@ import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { PublicReport } from '../domain/types';
+import { REGION_CENTERS } from './regions';
 
-const centers: Record<string, [number, number]> = { Boston: [42.355, -71.065], Dearborn: [42.3223, -83.1763] };
 export default function MapView({ region, reports, onSelect, onLocate, location }: { region: string; reports: PublicReport[]; onSelect: (id: string) => void; onLocate: () => void; location: [number, number] | null }) {
   const element = useRef<HTMLDivElement>(null); const map = useRef<L.Map | null>(null); const markers = useRef<L.LayerGroup | null>(null);
   useEffect(() => {
-    if (!element.current || map.current) return;
-    map.current = L.map(element.current, { zoomControl: false }).setView(centers[region] ?? centers.Boston, 14);
+    const center = location ?? REGION_CENTERS[region];
+    if (!element.current || map.current || !center) return;
+    map.current = L.map(element.current, { zoomControl: false }).setView(center, 14);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(map.current);
     L.control.zoom({ position: 'bottomright' }).addTo(map.current);
     markers.current = L.layerGroup().addTo(map.current);

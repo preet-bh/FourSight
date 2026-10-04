@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, ArrowDownRight, ArrowUpRight, Bell, Check, ChevronDown, CircleHelp, ClipboardList, Clock3, Flag, LocateFixed, MapPin, MessageCircle, MoreHorizontal, Plus, Radio, Search, Send, Settings, Shield, Sparkles, X } from 'lucide-react';
 import type { ForumPost, PublicReport, Report, ReportMedia, TicketStatus } from '../domain/types';
 import { assignTeam, hideReport, publicReport, transitionReport } from '../domain/workflow';
@@ -16,6 +16,8 @@ import MediaEvidenceEditor, { emptyDraft, type MediaEvidenceDraft } from '../fea
 import { toReportEvidence } from './report-evidence';
 import './media-editor.css';
 import { subscribeToAuthState } from './auth-subscription';
+import { REGION_CENTERS, regionNear, savedRegion } from './regions';
+import './region-map.css';
 
 type Page = 'map' | 'queue' | 'forum';
 const statuses: Record<TicketStatus, { label: string; className: string }> = { new: { label: 'New', className: 'red' }, in_progress: { label: 'In progress', className: 'amber' }, resolved: { label: 'Resolved', className: 'green' } };
@@ -28,10 +30,11 @@ export default function App() {
   const [staffReports, setStaffReports] = useState<Report[]>([]);
   const [authState, setAuthState] = useState<AuthState>({ status: backendEnabled ? 'loading' : 'demo', user: backendEnabled ? null : { id: 'demo-resident', displayName: 'Jordan Rivera', role: 'resident' } });
   const [teamsState, setTeamsState] = useState(teams);
-  const [page, setPage] = useState<Page>('map'); const [region, setRegion] = useState('Boston');
+  const [page, setPage] = useState<Page>('map'); const [region, setRegion] = useState(savedRegion);
   const [demoAdmin, setDemoAdmin] = useState(false); const admin = authState.user?.role === 'city_admin' || (!backendEnabled && demoAdmin); const [filter, setFilter] = useState<'all' | TicketStatus>('all');
   const [selected, setSelected] = useState<string | null>(null); const [composer, setComposer] = useState(false);
   const [location, setLocation] = useState<[number, number] | null>(null);
+  const regionChosenManually = useRef(false);
   const [showAuth, setShowAuth] = useState(false);
   const [notice, setNotice] = useState(''); const [, setTab] = useState<'overview' | 'discussion'>('overview');
   const reports = backendEnabled ? (admin ? staffReports : remoteReports) : data.reports;
@@ -46,23 +49,40 @@ export default function App() {
   const community = communityDataApi as CommunityDataApi | null;
   const demoCommunity = useMemo(() => createDemoCommunityApi(data, update), [data, update]);
   const refreshReports = useCallback(async () => {
-    if (!civic) return;
+    if (!civic || !region) { setRemoteReports([]); setStaffReports([]); return; }
     try {
       const [publicRows, staffRows] = await Promise.all([civic.listReports(region), admin ? civic.listStaffReports(region) : Promise.resolve([] as StaffReportRecord[])]);
       setRemoteReports(publicRows.map(row => ({ ...row, hideReason: null }) as Report));
       setStaffReports(admin ? staffRows : publicRows.map(row => ({ ...row, hideReason: null }) as Report));
     } catch (error) { setNotice(error instanceof Error ? error.message : 'Reports could not be loaded.'); }
   }, [admin, civic, region]);
-  useEffect(() => { void refreshReports(); if (!civic) return; return civic.subscribeReports(region, rows => { const mapped = rows.map(row => ({ ...row, hideReason: null }) as Report); setRemoteReports(mapped); if (!admin) setStaffReports(mapped); else void refreshReports(); }); }, [admin, civic, refreshReports, region]);
+  useEffect(() => { void refreshReports(); if (!civic || !region) return; return civic.subscribeReports(region, rows => { const mapped = rows.map(row => ({ ...row, hideReason: null }) as Report); setRemoteReports(mapped); if (!admin) setStaffReports(mapped); else void refreshReports(); }); }, [admin, civic, refreshReports, region]);
   useEffect(() => { if (!civic) return; void civic.listTeams().then(setTeamsState).catch(() => undefined); }, [civic]);
   useEffect(() => { if (!notice) return; const id = setTimeout(() => setNotice(''), 3500); return () => clearTimeout(id); }, [notice]);
-  const locate = () => { if (!navigator.geolocation) { setNotice('Location is not available on this device.'); return; } navigator.geolocation.getCurrentPosition(pos => setLocation([pos.coords.latitude, pos.coords.longitude]), () => setNotice('Location permission was denied. Showing Boston instead.')); };
+  const locate = useCallback((showError = true) => {
+    if (!navigator.geolocation) { if (showError) setNotice('Location is unavailable. Choose a region to continue.'); return; }
+    navigator.geolocation.getCurrentPosition(pos => {
+      if (!showError && regionChosenManually.current) return;
+      const coordinates: [number, number] = [pos.coords.latitude, pos.coords.longitude];
+      regionChosenManually.current = false;
+      setLocation(coordinates);
+      setRegion(regionNear(coordinates) ?? '');
+      setSelected(null);
+    }, () => { if (showError) setNotice('Location permission was denied. Choose a region to continue.'); }, { maximumAge: 300000, timeout: 5000 });
+  }, []);
+  const chooseRegion = (nextRegion: string) => {
+    regionChosenManually.current = true;
+    setRegion(nextRegion);
+    setLocation(null);
+    setSelected(null);
+  };
   const visibleReports = reports.filter(r => r.region === region);
-  useEffect(() => { if (!navigator.geolocation) return; navigator.geolocation.getCurrentPosition(pos => setLocation([pos.coords.latitude, pos.coords.longitude]), () => undefined, { maximumAge: 300000, timeout: 5000 }); }, []);
+  useEffect(() => { locate(false); }, [locate]);
+  useEffect(() => { if (!region) return; try { localStorage.setItem('foursight:region', region); } catch { /* Browsing still works when storage is unavailable. */ } }, [region]);
   return <div className="app-shell">
     <aside className="sidebar">
       <div className="brand"><div className="brand-mark"><span>F</span><i/></div><div><strong>FourSight<span>.AI</span></strong><small>CIVIC SIGNAL, REAL ACTION</small></div></div>
-      <div className="region-picker"><span className="region-dot"/><div><small>YOUR REGION</small><select value={region} onChange={e => { setRegion(e.target.value); setSelected(null); }}><option>Boston</option><option>Dearborn</option></select></div><ChevronDown size={14}/></div>
+      <div className="region-picker"><span className="region-dot"/><div><small>YOUR REGION</small><select aria-label="Select region" value={region} onChange={e => chooseRegion(e.target.value)}><option value="">Choose region</option>{Object.keys(REGION_CENTERS).map(name => <option key={name} value={name}>{name}</option>)}</select></div><ChevronDown size={14}/></div>
       <nav className="main-nav"><p className="nav-label">WORKSPACE</p>
         <button className={page === 'map' ? 'nav-item active' : 'nav-item'} onClick={() => setPage('map')}><MapPin size={17}/><span>Community map</span><b>{publicReports.length}</b></button>
         <button className={page === 'queue' ? 'nav-item active' : 'nav-item'} onClick={() => setPage('queue')}><ClipboardList size={17}/><span>{admin ? 'Operations queue' : 'Reports nearby'}</span><b>{publicReports.filter(r => r.region === region).length}</b></button>
@@ -73,19 +93,22 @@ export default function App() {
     </aside>
     <main className="main-content">
       <header className="topbar"><div className="breadcrumb">FourSight <span>/</span> {page === 'map' ? 'Community map' : page === 'queue' ? (admin ? 'Operations queue' : 'Reports nearby') : 'Neighborhood forum'}</div><div className="top-actions"><span className="connection-pill"><i/>{backendEnabled ? 'SUPABASE CONNECTED' : 'LOCAL DEMO MODE'}</span>{authState.status !== 'signed_in' && backendEnabled && <button className="secondary-button" onClick={() => setShowAuth(true)}>Sign in</button>}<button className="icon-button notification" onClick={() => setNotice('You’re all caught up.')} aria-label="Notifications"><Bell size={18}/><i/></button><div className="top-avatar">{admin ? 'CA' : authState.user?.displayName.slice(0,2).toUpperCase() ?? '??'}</div></div></header>
+      <label className="mobile-region-picker">Region <select value={region} onChange={event => chooseRegion(event.target.value)}><option value="">Choose region</option>{Object.keys(REGION_CENTERS).map(name => <option key={name} value={name}>{name}</option>)}</select></label>
       {page === 'map' && <>
-        <div className="page-heading"><div><div className="eyebrow"><span className="live-dot"/> LOCAL PULSE <span className="eyebrow-divider">/</span> {region.toUpperCase()}</div><h1>See what needs attention.</h1><p>Real issues, real neighbors, visible progress.</p></div><button className="primary-button" onClick={() => authState.status === 'signed_in' || authState.status === 'demo' ? setComposer(true) : setShowAuth(true)}><Plus size={17}/> Report an issue</button></div>
+        <div className="page-heading"><div><div className="eyebrow"><span className="live-dot"/> LOCAL PULSE <span className="eyebrow-divider">/</span> {region ? region.toUpperCase() : 'NEAR YOU'}</div><h1>See what needs attention.</h1><p>Real issues, real neighbors, visible progress.</p></div><button className="primary-button" onClick={() => !region ? setNotice('Choose a region before reporting.') : authState.status === 'signed_in' || authState.status === 'demo' ? setComposer(true) : setShowAuth(true)}><Plus size={17}/> Report an issue</button></div>
         <div className="stats-grid"><Stat icon={<Radio size={16}/>} label="Community signals" value={String(publicReports.filter(r => r.region === region).length).padStart(2, '0')} change="All reports" tone="blue"/><Stat icon={<Clock3 size={16}/>} label="Being worked on" value={String(publicReports.filter(r => r.region === region && r.status === 'in_progress').length).padStart(2, '0')} change="With city teams" tone="amber"/><Stat icon={<Check size={16}/>} label="Resolved this month" value={String(publicReports.filter(r => r.region === region && r.status === 'resolved').length).padStart(2, '0')} change="Community wins" tone="green"/><Stat icon={<Activity size={16}/>} label="Avg. first response" value="1.8d" change={<><ArrowDownRight size={14}/> 12% this week</>} tone="purple"/></div>
-        <div className="map-section"><div className="map-toolbar"><div><h2>Live issue map <span className="map-status-dot"/></h2><p>See the issues your neighbors are reporting</p></div><div className="map-tools"><div className="filter-tabs">{(['all','new','in_progress','resolved'] as const).map(s => <button key={s} className={filter === s ? 'selected' : ''} onClick={() => setFilter(s)}>{s === 'all' ? 'All' : statuses[s].label}<small>{s === 'all' ? publicReports.filter(r=>r.region===region).length : publicReports.filter(r=>r.region===region && r.status===s).length}</small></button>)}</div><button className="icon-button map-search" onClick={locate} title="Find my location"><LocateFixed size={17}/></button></div></div>
-          <MapView region={region} reports={filtered} onSelect={selectReport} onLocate={locate} location={location}/>
+        <div className="map-section"><div className="map-toolbar"><div><h2>Live issue map <span className="map-status-dot"/></h2><p>See the issues your neighbors are reporting</p></div><div className="map-tools"><div className="filter-tabs">{(['all','new','in_progress','resolved'] as const).map(s => <button key={s} className={filter === s ? 'selected' : ''} onClick={() => setFilter(s)}>{s === 'all' ? 'All' : statuses[s].label}<small>{s === 'all' ? publicReports.filter(r=>r.region===region).length : publicReports.filter(r=>r.region===region && r.status===s).length}</small></button>)}</div><button className="icon-button map-search" onClick={() => locate()} title="Find my location"><LocateFixed size={17}/></button></div></div>
+          {location || region ? <MapView region={region} reports={filtered} onSelect={selectReport} onLocate={() => locate()} location={location}/> : <div className="map-wrap map-placeholder"><div><MapPin size={24}/><strong>Choose your region</strong><p>Allow location access or select a region to open the map nearby.</p><button className="secondary-button" onClick={() => locate()}>Use my location</button></div></div>}
+          {location && !region && <div className="region-map-hint">Showing your location. Select a supported region to view reports and submit an issue.</div>}
           <div className="map-footer"><span><i className="legend-dot red"/> New <i className="legend-dot amber"/> In progress <i className="legend-dot green"/> Resolved</span><span>Updated just now <span className="footer-sep">·</span> <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">Map data © OpenStreetMap</a></span></div>
         </div>
         <div className="below-map"><div className="section-title"><div><h2>Community signals <span className="count-badge">{filtered.length}</span></h2><p>What neighbors are seeing around {region}</p></div><button className="text-button" onClick={() => setPage('queue')}>View all reports <ArrowUpRight size={14}/></button></div><div className="signal-list">{filtered.slice(0, 3).map(report => <SignalRow key={report.id} report={report} onClick={() => setSelected(report.id)}/>)}{filtered.length === 0 && <Empty text="No reports match this filter yet."/>}</div></div>
       </>}
       {page === 'queue' && admin && <AdminQueue reports={visibleReports} teams={teamsState} onSelect={report => setSelected(report.id)}/>}
       {page === 'queue' && !admin && <PublicReportsPage reports={publicReports.filter(report => report.region === region)} onSelect={selectReport}/>}
-      {page === 'forum' && community && <CommunityForumPage api={community} session={authState} region={region}/>}
-      {page === 'forum' && !community && <CommunityForumPage api={demoCommunity} session={authState} region={region}/>}
+      {page === 'forum' && !region && <div className="subpage"><Empty text="Choose your region to see neighborhood discussions."/></div>}
+      {page === 'forum' && region && community && <CommunityForumPage api={community} session={authState} region={region}/>}
+      {page === 'forum' && region && !community && <CommunityForumPage api={demoCommunity} session={authState} region={region}/>}
     </main>
     {selected && activeReport && <DetailDrawer report={activeReport} admin={admin} update={update} close={() => setSelected(null)} setNotice={setNotice} civic={civic} teams={teamsState} onChanged={refreshReports}/>}
     {composer && <ReportComposer region={region} initialLocation={location} setNotice={setNotice} onClose={() => setComposer(false)} onSubmit={async input => { try { if (civic) { const saved = await civic.createReport(input); let deliveryMessage = 'City delivery is tracked separately.'; if (saved.region === 'Boston') { try { deliveryMessage = (await forwardSavedReportToBoston(saved.databaseId)).message; } catch (deliveryError) { deliveryMessage = deliveryError instanceof Error ? `Boston 311 delivery check failed: ${deliveryError.message}` : 'Boston 311 delivery could not be checked.'; } } setComposer(false); await refreshReports(); setSelected(saved.id); setNotice(`Report ${saved.id} saved. ${deliveryMessage}`); } else { const media = await Promise.all(input.media.map(async item => ({ id: crypto.randomUUID(), kind: item.kind, url: await putLocalMedia(item.file), label: item.label, selectedFrameSeconds: item.selectedFrameSeconds }))); const now = new Date().toISOString(); const report: Report = { ...input, id: `FS-${Math.floor(2050 + Math.random() * 7900)}`, status: 'new', delivery: { state: 'sandbox', message: 'Local demo — not sent to city services.' }, createdAt: now, updatedAt: now, media, transcript: input.transcript ?? '', assignedTeamId: null, reporterId: 'demo-resident', hiddenFromMap: false, hideReason: null, timeline: [{ status: 'new', at: now, actor: authState.user?.displayName ?? 'Resident' }] }; update(d => ({ ...d, reports: [report, ...d.reports] })); setComposer(false); setSelected(report.id); setNotice(`Report ${report.id} added in local demo mode.`); } } catch(error) { setNotice(error instanceof Error ? error.message : 'Could not save report.'); } }}/ >}
@@ -141,7 +164,7 @@ function ReportComposer({region,initialLocation,onClose,onSubmit,setNotice}:{reg
   const [title,setTitle]=useState('');
   const [category,setCategory]=useState('Street & sidewalk');
   const [busy,setBusy]=useState(false);
-  const [coords,setCoords]=useState<[number,number]>(initialLocation??(region==='Boston'?[42.355,-71.065]:[42.3223,-83.1763]));
+  const [coords,setCoords]=useState<[number,number]>(initialLocation??REGION_CENTERS[region]);
   const [consent,setConsent]=useState(false);
 
   const submit=async()=>{
