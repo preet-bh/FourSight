@@ -25,7 +25,7 @@ The old single-file prototype remains at [`foursight.html`](./foursight.html) fo
 
 1. Create a Supabase project and apply `supabase/migrations/202610030001_initial.sql` followed by `supabase/migrations/202610030002_admin_workflow.sql`.
 2. Create a private Storage bucket named `report-media` and add Storage policies matching the migration's report ownership and city-admin rules before storing live uploads. Keep sensitive media private and use short-lived signed URLs.
-3. Configure the Edge Function secrets below with `supabase secrets set`; do not put them in a `VITE_` variable or commit them.
+3. Enable Vertex AI in the Google Cloud project and ensure billing is enabled. Create a Google Cloud API key associated with that project, grant the key's principal the Vertex AI User role (`roles/aiplatform.user`) as required for your key setup, and restrict the key to the Vertex AI API. Store it as the Supabase secret `VERTEX_AI_API_KEY`, alongside `GOOGLE_CLOUD_PROJECT` and optional `GOOGLE_CLOUD_LOCATION` / `VERTEX_AI_GEMINI_MODEL`. Do not put these values in a `VITE_` variable or commit them.
 4. Deploy with `supabase functions deploy transcribe-video` and `supabase functions deploy forward-to-boston`.
 5. Add only the Supabase project URL and publishable key to local `.env` or Vercel environment variables. A trusted operator should promote the verified admin profile by UUID; never assign roles from editable user metadata.
 6. Request BOS:311 API access. Configure `BOS_311_ENDPOINT`, `BOS_311_API_KEY`, and a category mapping with the exact service code and service name verified from Boston's live catalog. The function requires the configured code and name to match one unique entry from `{BOS_311_ENDPOINT}/services.json` before sending anything. Without credentials, a verified boundary, or a unique code/name match, delivery remains `sandbox`. Only reports whose region is exactly Boston and whose coordinates are inside the configured boundary are eligible; FourSight ticket status remains independent.
@@ -34,7 +34,11 @@ The admin queue and ticket controls are exported from [`src/features/admin/`](./
 
 Server-only secrets for Supabase Edge Functions:
 
-- `OPENAI_API_KEY` (used server-side for transient video-audio transcription and report-draft generation)
+- `OPENAI_API_KEY` (used server-side only for transient video-audio transcription)
+- `VERTEX_AI_API_KEY` (Google Cloud API key for the Vertex AI project that should be billed; keep it server-side and restrict it to the Vertex AI API)
+- `GOOGLE_CLOUD_PROJECT` (the billing-enabled Google Cloud project ID associated with `VERTEX_AI_API_KEY`)
+- `GOOGLE_CLOUD_LOCATION` (optional; defaults to `global`)
+- `VERTEX_AI_GEMINI_MODEL` (optional; defaults to `gemini-2.5-flash`)
 - `APP_ORIGIN` (the deployed app origin, for example `https://foursight.example`)
 - `BOS_311_ENDPOINT` (approved Open311 endpoint)
 - `BOS_311_BOUNDARY_GEOJSON` (verified City of Boston Polygon/MultiPolygon GeoJSON; outside-boundary locations stay sandboxed)
@@ -42,6 +46,8 @@ Server-only secrets for Supabase Edge Functions:
 - `BOS_311_SERVICE_CODE_STREET_SIDEWALK`, `BOS_311_SERVICE_CODE_TRASH_SANITATION`, `BOS_311_SERVICE_CODE_LIGHTING`, `BOS_311_SERVICE_CODE_PARKS`, `BOS_311_SERVICE_CODE_WATER_DRAINAGE`, `BOS_311_SERVICE_CODE_PUBLIC_SAFETY`, and `BOS_311_SERVICE_CODE_OTHER`, each paired with its `BOS_311_SERVICE_NAME_<CATEGORY>` value (for example, `BOS_311_SERVICE_NAME_STREET_SIDEWALK`). Set only exact code/name mappings verified against the approved BOS:311 catalog.
 
 `forward-to-boston` expects a persisted Supabase report UUID and an authenticated owner. It verifies each configured service code and service name together against the live catalog, uses a selected evidence frame for `media_url` when one is attached, preserves delivery as separate from app status, and will not automatically retry pending or ambiguous requests. The current browser demo uses local IDs, so it cannot call this integration yet.
+
+Video report drafting sends the temporary audio transcript from the transcription step to Gemini through Vertex AI using the configured Google Cloud project. The transcript and generated draft are returned to the browser for resident review; the transcript is not saved by FourSight. Vertex AI usage is billed to the configured Cloud project according to its pricing and quota settings.
 
 ## Team split
 
