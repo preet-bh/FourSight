@@ -23,12 +23,14 @@ The old single-file prototype remains at [`foursight.html`](./foursight.html) fo
 
 ## Supabase setup foundations
 
-1. Create a Supabase project and apply `supabase/migrations/202610030001_initial.sql`.
+1. Create a Supabase project and apply `supabase/migrations/202610030001_initial.sql` followed by `supabase/migrations/202610030002_admin_workflow.sql`.
 2. Create a private Storage bucket named `report-media` and add Storage policies matching the migration's report ownership and city-admin rules before storing live uploads. Keep sensitive media private and use short-lived signed URLs.
 3. Configure the Edge Function secrets below with `supabase secrets set`; do not put them in a `VITE_` variable or commit them.
 4. Deploy with `supabase functions deploy transcribe-video` and `supabase functions deploy forward-to-boston`.
 5. Add only the Supabase project URL and publishable key to local `.env` or Vercel environment variables. A trusted operator should promote the verified admin profile by UUID; never assign roles from editable user metadata.
 6. Request BOS:311 API access. Configure `BOS_311_ENDPOINT`, `BOS_311_API_KEY`, and one `BOS_311_SERVICE_CODE_<CATEGORY>` value for each exact category code after matching it to Boston's live catalog. Without these values, the function returns `sandbox`. Only Boston-region reports are eligible; the city API receives an initial request, while ticket status remains FourSight-owned.
+
+The admin queue and ticket controls are exported from [`src/features/admin/`](./src/features/admin/README.md). They are integration components and are not wired into the local demo app shell.
 
 Server-only secrets for Supabase Edge Functions:
 
