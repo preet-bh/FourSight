@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { requestTranscript } from '../../platform/backend';
+import { generateVideoReport } from '../../platform/backend';
 import { readVideoDuration, validateEvidenceFile, type EvidenceFileKind } from './media-validation';
 
 export type MediaEvidenceDraft = {
@@ -8,6 +8,7 @@ export type MediaEvidenceDraft = {
   selectedFrameFile: File | null;
   selectedFrameSeconds: number | null;
   description: string;
+  descriptionConfirmed: boolean;
 };
 
 type Props = {
@@ -24,6 +25,7 @@ export default function MediaEvidenceEditor({ onChange, disabled = false }: Prop
   const [selectedFrameSeconds, setSelectedFrameSeconds] = useState<number | null>(null);
   const [frameFile, setFrameFile] = useState<File | null>(null);
   const [description, setDescription] = useState('');
+  const [descriptionConfirmed, setDescriptionConfirmed] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -47,9 +49,10 @@ export default function MediaEvidenceEditor({ onChange, disabled = false }: Prop
       mediaKind: kind,
       selectedFrameFile: frameFile,
       selectedFrameSeconds: frameFile ? selectedFrameSeconds : null,
-      description,
+      description: kind === 'video' && !descriptionConfirmed ? '' : description,
+      descriptionConfirmed: kind !== 'video' || (Boolean(description.trim()) && descriptionConfirmed),
     });
-  }, [description, file, frameFile, frameSeconds, kind, selectedFrameSeconds]);
+  }, [description, descriptionConfirmed, file, frameFile, frameSeconds, kind, selectedFrameSeconds]);
 
   const chooseFile = async (next: File | null) => {
     if (!next) return;
@@ -65,6 +68,8 @@ export default function MediaEvidenceEditor({ onChange, disabled = false }: Prop
       setSelectedFrameSeconds(null);
       setFrameFile(null);
       setTranscript('');
+      setDescription('');
+      setDescriptionConfirmed(false);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not use this media file.');
     } finally {
@@ -80,6 +85,8 @@ export default function MediaEvidenceEditor({ onChange, disabled = false }: Prop
     setSelectedFrameSeconds(null);
     setFrameFile(null);
     setTranscript('');
+    setDescription('');
+    setDescriptionConfirmed(false);
   };
 
   const captureFrame = async () => {
@@ -145,11 +152,15 @@ export default function MediaEvidenceEditor({ onChange, disabled = false }: Prop
     setBusy(true);
     setMessage('');
     try {
-      const text = await requestTranscript(file);
-      setTranscript(text);
-      setMessage(text ? 'Temporary transcript ready. Use it as a reference to write a concise summary below.' : 'No speech was detected. Add a typed summary instead.');
+      const result = await generateVideoReport(file);
+      setTranscript(result.transcript);
+      setDescription(result.summary);
+      setDescriptionConfirmed(false);
+      setMessage(result.summary
+        ? 'A report draft is ready from the video audio. Review it and confirm before continuing.'
+        : 'No speech was detected. You can optionally write a report description instead.');
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Transcription is unavailable. Add a typed description instead.');
+      setMessage(error instanceof Error ? error.message : 'Could not generate a report from this video. You can optionally write a description instead.');
     } finally {
       setBusy(false);
     }
@@ -195,7 +206,7 @@ export default function MediaEvidenceEditor({ onChange, disabled = false }: Prop
               </button>
               {frameFile && <p>Selected image frame at {selectedFrameSeconds?.toFixed(2)} seconds will accompany the full video.</p>}
               <button type="button" disabled={disabled || busy} onClick={() => { void transcribe(); }}>
-                {busy ? 'Transcribing…' : 'Generate transcript'}
+                {busy ? 'Generating…' : 'Generate report from video'}
               </button>
             </div>
           )}
@@ -204,29 +215,38 @@ export default function MediaEvidenceEditor({ onChange, disabled = false }: Prop
       )}
       {kind === 'video' && transcript && (
         <div>
-          <label>
-            Temporary transcript (not saved)
-            <textarea
-              value={transcript}
-              disabled={disabled || busy}
-              onChange={event => setTranscript(event.currentTarget.value)}
-            />
-          </label>
-          <p>Use the transcript as a reference; only the summary you write below is included in the report.</p>
+          <details>
+            <summary>View temporary audio transcript (not saved)</summary>
+            <textarea value={transcript} readOnly />
+          </details>
+          <p>The transcript is used to generate the report description and is never included in the saved report.</p>
         </div>
       )}
       <label>
-        Summary report (this is saved and forwarded)
+        Report description (optional)
         <textarea
           value={description}
           maxLength={1200}
           disabled={disabled}
-          placeholder="Summarize the issue shown in the video. If transcription is unavailable or there is no speech, describe what the video shows."
-          onChange={event => setDescription(event.currentTarget.value)}
+          placeholder={kind === 'video'
+            ? 'A report draft will appear here after processing the video audio. You can edit it or leave it blank.'
+            : 'Describe the issue shown in the photo.'}
+          onChange={event => { setDescription(event.currentTarget.value); setDescriptionConfirmed(false); }}
         />
       </label>
+      {kind === 'video' && description.trim() && (
+        <label>
+          <input
+            type="checkbox"
+            checked={descriptionConfirmed}
+            disabled={disabled || busy}
+            onChange={event => setDescriptionConfirmed(event.currentTarget.checked)}
+          />
+          I reviewed and confirm this report description
+        </label>
+      )}
       {message && <p role="status">{message}</p>}
-      <p>Transcription is temporary and stays in this editor. Save the FourSight report before calling `forwardSavedReportToBoston` with its persisted id.</p>
+      <p>Only a confirmed report description is included with a video report. Transcription remains temporary and is not saved. Save the FourSight report before calling `forwardSavedReportToBoston` with its persisted id.</p>
       {file && <p>Attached {kind} stays in FourSight; the selected frame is separate evidence for city forwarding.</p>}
     </section>
   );

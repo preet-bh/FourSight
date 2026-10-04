@@ -77,7 +77,55 @@ serve(async (request) => {
   if (!payload || typeof payload !== 'object' || !('text' in payload) || typeof payload.text !== 'string') {
     return json({ error: 'Transcription service returned an invalid response. Add a typed description instead.' }, 502);
   }
-  return json({ text: payload.text });
+
+  const transcript = payload.text.trim();
+  if (!transcript) return json({ text: '', summary: '' });
+
+  let summaryResponse: Response;
+  let summaryPayload: unknown;
+  try {
+    summaryResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${openAiKey}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        temperature: 0.2,
+        max_tokens: 250,
+        messages: [
+          {
+            role: 'system',
+            content: 'Write a concise, factual civic-service report description from the resident video transcript. Include the issue and location only if explicitly stated. Do not invent details, causes, urgency, or locations. Return only the description, in at most two sentences and 1200 characters.',
+          },
+          { role: 'user', content: transcript },
+        ],
+      }),
+      signal: AbortSignal.timeout(30000),
+    });
+    summaryPayload = await summaryResponse.json();
+  } catch {
+    return json({ error: 'Could not create a report draft from the transcript. You can enter a description instead.' }, 502);
+  }
+
+  if (!summaryResponse.ok) {
+    return json({ error: 'Could not create a report draft from the transcript. You can enter a description instead.' }, 502);
+  }
+  const choices = summaryPayload && typeof summaryPayload === 'object' && 'choices' in summaryPayload
+    ? summaryPayload.choices
+    : undefined;
+  const firstChoice = Array.isArray(choices) ? choices[0] : undefined;
+  const message = firstChoice && typeof firstChoice === 'object' && 'message' in firstChoice
+    ? firstChoice.message
+    : undefined;
+  const summary = message && typeof message === 'object' && 'content' in message && typeof message.content === 'string'
+    ? message.content.trim()
+    : '';
+  if (!summary || summary.length > 1200) {
+    return json({ error: 'The report draft was empty or too long. You can enter a description instead.' }, 502);
+  }
+  return json({ text: transcript, summary });
 });
 
 function json(body: unknown, status = 200) {

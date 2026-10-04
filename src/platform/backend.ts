@@ -13,13 +13,21 @@ export type BostonDeliveryResult = {
   message: string;
 };
 
-export async function requestTranscript(file: File): Promise<string> {
-  if (!supabase) throw new Error('Transcription service is not configured. Add a typed description instead.');
+export type VideoReportDraft = { transcript: string; summary: string };
+
+export async function generateVideoReport(file: File): Promise<VideoReportDraft> {
+  if (!supabase) throw new Error('Video transcription is not configured. You can write a report description instead.');
   const audio = await extractAudioForTranscript(file);
   const { data, error } = await supabase.functions.invoke('transcribe-video', { body: audio, headers: { 'Content-Type': audio.type || 'audio/webm' } });
-  if (error) throw new Error(`Transcription failed: ${error.message}`);
-  if (typeof data?.text !== 'string') throw new Error('The transcription service returned no transcript. Add a typed description instead.');
-  return data.text;
+  if (error) throw new Error(`Video transcription failed: ${error.message}`);
+  if (typeof data?.text !== 'string' || typeof data?.summary !== 'string') {
+    throw new Error('The video service returned an invalid report. You can write a report description instead.');
+  }
+  return { transcript: data.text, summary: data.summary };
+}
+
+export async function requestTranscript(file: File): Promise<string> {
+  return (await generateVideoReport(file)).transcript;
 }
 
 export async function forwardSavedReportToBoston(reportId: string): Promise<BostonDeliveryResult> {

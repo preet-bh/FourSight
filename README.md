@@ -17,7 +17,7 @@ Run checks with `npm test` and `npm run build`.
 
 ## Current integration boundary
 
-The runnable app is a self-contained local demo. It does not currently sync ticket/forum data to Supabase, provide production sign-in, or submit reports to Boston 311. It marks every new ticket's city delivery as **sandbox** so the UI never implies that city staff received it. The Supabase migration and Edge Functions are backend foundations for the next integration pass; they are not wired into the current local-first UI. `src/features/media/MediaEvidenceEditor.tsx` is the reusable media contract for that integration. Its `MediaEvidenceDraft` emits the original photo/video, an optional frame image and timestamp (persist the latter as `ReportMedia.selectedFrameSeconds`), and the resident-written summary description. Generated transcript text is displayed and editable only in the current editor session as a reference for writing the summary; it is never included in `MediaEvidenceDraft`, persisted, or forwarded. Keep the full video attached, persist the selected frame separately, save the FourSight report and summary first, and only then pass its persisted Supabase UUID to `forwardSavedReportToBoston`.
+The runnable app is a self-contained local demo. It does not currently sync ticket/forum data to Supabase, provide production sign-in, or submit reports to Boston 311. It marks every new ticket's city delivery as **sandbox** so the UI never implies that city staff received it. The Supabase migration and Edge Functions are backend foundations for the next integration pass; they are not wired into the current local-first UI. `src/features/media/MediaEvidenceEditor.tsx` is the reusable media contract for that integration. For a video, the browser extracts its audio, the server transcribes it and generates a concise report description, and the resident can edit and confirm that description. The description is optional; a resident need not type a separate summary. Only the confirmed description is emitted in `MediaEvidenceDraft`; transcript text stays transient and is never included in the contract, persisted, or forwarded. If there is no speech or processing is unavailable, the resident can optionally enter a description instead. Keep the full video attached, persist the selected frame separately, save the FourSight report and confirmed description first, and only then pass its persisted Supabase UUID to `forwardSavedReportToBoston`.
 
 The old single-file prototype remains at [`foursight.html`](./foursight.html) for reference. The new app is under `src/`.
 
@@ -34,7 +34,7 @@ The admin queue and ticket controls are exported from [`src/features/admin/`](./
 
 Server-only secrets for Supabase Edge Functions:
 
-- `OPENAI_API_KEY`
+- `OPENAI_API_KEY` (used server-side for transient video-audio transcription and report-draft generation)
 - `APP_ORIGIN` (the deployed app origin, for example `https://foursight.example`)
 - `BOS_311_ENDPOINT` (approved Open311 endpoint)
 - `BOS_311_BOUNDARY_GEOJSON` (verified City of Boston Polygon/MultiPolygon GeoJSON; outside-boundary locations stay sandboxed)
