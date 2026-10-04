@@ -6,6 +6,8 @@ function makeClient(overrides: Record<string, unknown> = {}) {
     signUp: vi.fn(async () => ({ data: { user: { id: 'user-1' }, session: null }, error: null })),
     signInWithPassword: vi.fn(async () => ({ data: { user: { id: 'user-1' }, session: {} }, error: null })),
     signOut: vi.fn(async () => ({ error: null })),
+    getUser: vi.fn(async () => ({ data: { user: { id: 'user-1', email: 'ada@example.org' } }, error: null })),
+    updateUser: vi.fn(async () => ({ data: { user: { id: 'user-1', email: 'new@example.org' } }, error: null })),
     getSession: vi.fn(async () => ({ data: { session: null }, error: null })),
     onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
     ...((overrides.auth as object | undefined) ?? {}),
@@ -141,5 +143,21 @@ describe('auth service', () => {
     const { client, auth } = makeClient();
     await createAuthApi(client as never).signOut();
     expect(auth.signOut).toHaveBeenCalledOnce();
+  });
+
+  it('loads the current email from the authenticated Supabase user', async () => {
+    const { client, auth } = makeClient();
+    await expect(createAuthApi(client as never).getEmail()).resolves.toBe('ada@example.org');
+    expect(auth.getUser).toHaveBeenCalledOnce();
+  });
+
+  it('validates and requests an email change through Supabase Auth', async () => {
+    const { client, auth } = makeClient();
+    const api = createAuthApi(client as never);
+
+    await expect(api.updateEmail(' new@example.org ')).resolves.toBeUndefined();
+    expect(auth.updateUser).toHaveBeenCalledWith({ email: 'new@example.org' });
+    await expect(api.updateEmail('not-an-email')).rejects.toThrow(/valid email/i);
+    expect(auth.updateUser).toHaveBeenCalledOnce();
   });
 });

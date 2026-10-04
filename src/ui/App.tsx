@@ -6,6 +6,7 @@ import { forwardSavedReportToBoston } from '../platform/backend';
 import { loadData, putLocalMedia, resolveLocalMedia, saveData, teams, type AppData } from '../platform/data';
 import MapView from './MapView';
 import AuthPanel from '../features/auth/AuthPanel';
+import AccountSettings from '../features/auth/AccountSettings';
 import { authApi } from '../features/auth/auth-service';
 import { backendEnabled } from '../platform/backend';
 import { civicDataApi, communityDataApi } from '../platform/data';
@@ -18,10 +19,16 @@ import { subscribeToAuthState } from './auth-subscription';
 import { REGION_CENTERS, regionNear, savedRegion } from './regions';
 import './region-map.css';
 
-type Page = 'map' | 'queue' | 'forum';
+type Page = 'map' | 'queue' | 'forum' | 'settings';
 const statuses: Record<TicketStatus, { label: string; className: string }> = { new: { label: 'New', className: 'red' }, in_progress: { label: 'In progress', className: 'amber' }, resolved: { label: 'Resolved', className: 'green' } };
 const topics = ['All topics', 'Cost of living', 'Street safety', 'Public spaces', 'Neighborhood services'];
 const timeAgo = (value: string) => { const mins = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 60000)); return mins < 60 ? `${mins}m ago` : mins < 1440 ? `${Math.floor(mins / 60)}h ago` : `${Math.floor(mins / 1440)}d ago`; };
+
+type DemoCommunityState = {
+  flags: ModerationFlag[];
+  hiddenPosts: Set<string>;
+  hiddenComments: Set<string>;
+};
 
 export default function App() {
   const [data, setData] = useState<AppData>(() => loadData());
@@ -35,6 +42,8 @@ export default function App() {
   const [location, setLocation] = useState<[number, number] | null>(null);
   const regionChosenManually = useRef(false);
   const [showAuth, setShowAuth] = useState(false);
+  const [openModerationQueue, setOpenModerationQueue] = useState(false);
+  const demoCommunityState = useRef<DemoCommunityState>({ flags: [], hiddenPosts: new Set(), hiddenComments: new Set() });
   const [notice, setNotice] = useState(''); const [, setTab] = useState<'overview' | 'discussion'>('overview');
   const reports = backendEnabled ? (admin ? staffReports : remoteReports) : data.reports;
   const publicReports = useMemo(() => backendEnabled ? remoteReports as PublicReport[] : data.reports.map(publicReport).filter((r): r is PublicReport => !!r), [backendEnabled, data.reports, remoteReports]);
@@ -46,7 +55,7 @@ export default function App() {
   useEffect(() => { if (authState.status === 'signed_in') setShowAuth(false); }, [authState.status]);
   const civic = civicDataApi as CivicDataApi | null;
   const community = communityDataApi as CommunityDataApi | null;
-  const demoCommunity = useMemo(() => createDemoCommunityApi(data, update), [data, update]);
+  const demoCommunity = useMemo(() => createDemoCommunityApi(data, update, demoCommunityState.current), [data, update]);
   const refreshReports = useCallback(async () => {
     if (!civic || !region) { setRemoteReports([]); setStaffReports([]); return; }
     try {
@@ -76,6 +85,7 @@ export default function App() {
     setSelected(null);
   };
   const visibleReports = reports.filter(r => r.region === region);
+  const canOpenModeration = admin || authState.user?.role === 'moderator';
   useEffect(() => { locate(false); }, [locate]);
   useEffect(() => { if (!region) return; try { localStorage.setItem('foursight:region', region); } catch { /* Browsing still works when storage is unavailable. */ } }, [region]);
   return <div className="app-shell">
@@ -83,16 +93,17 @@ export default function App() {
       <div className="brand"><div className="brand-mark"><span>F</span><i/></div><div><strong>FourSight<span>.AI</span></strong><small>CIVIC SIGNAL, REAL ACTION</small></div></div>
       <div className="region-picker"><span className="region-dot"/><div><small>YOUR REGION</small><select aria-label="Select region" value={region} onChange={e => chooseRegion(e.target.value)}><option value="">Choose region</option>{Object.keys(REGION_CENTERS).map(name => <option key={name} value={name}>{name}</option>)}</select></div><ChevronDown size={14}/></div>
       <nav className="main-nav"><p className="nav-label">WORKSPACE</p>
-        <button className={page === 'map' ? 'nav-item active' : 'nav-item'} onClick={() => setPage('map')}><MapPin size={17}/><span>Community map</span><b>{publicReports.length}</b></button>
-        <button className={page === 'queue' ? 'nav-item active' : 'nav-item'} onClick={() => setPage('queue')}><ClipboardList size={17}/><span>{admin ? 'Operations queue' : 'Reports nearby'}</span><b>{publicReports.filter(r => r.region === region).length}</b></button>
-        <button className={page === 'forum' ? 'nav-item active' : 'nav-item'} onClick={() => setPage('forum')}><MessageCircle size={17}/><span>Neighborhood forum</span></button>
-        {admin && <><p className="nav-label nav-spaced">CITY OPERATIONS</p><button className="nav-item" onClick={() => setNotice('All reports are shown in the operations queue.')}><Activity size={17}/><span>Activity & reports</span></button><button className="nav-item" onClick={() => setNotice('No pending moderation flags.')}><Shield size={17}/><span>Moderation</span></button></>}
+        <button className={page === 'map' ? 'nav-item active' : 'nav-item'} onClick={() => { setOpenModerationQueue(false); setPage('map'); }}><MapPin size={17}/><span>Community map</span><b>{publicReports.length}</b></button>
+        <button className={page === 'queue' ? 'nav-item active' : 'nav-item'} onClick={() => { setOpenModerationQueue(false); setPage('queue'); }}><ClipboardList size={17}/><span>{admin ? 'Operations queue' : 'Reports nearby'}</span><b>{publicReports.filter(r => r.region === region).length}</b></button>
+        <button className={page === 'forum' && !openModerationQueue ? 'nav-item active' : 'nav-item'} onClick={() => { setOpenModerationQueue(false); setPage('forum'); }}><MessageCircle size={17}/><span>Neighborhood forum</span></button>
+        {admin && <><p className="nav-label nav-spaced">CITY OPERATIONS</p><button className="nav-item" onClick={() => { setOpenModerationQueue(false); setPage('queue'); }}><Activity size={17}/><span>Activity & reports</span></button></>}
+        {canOpenModeration && <button className={page === 'forum' && openModerationQueue ? 'nav-item active' : 'nav-item'} onClick={() => { setOpenModerationQueue(true); setPage('forum'); }}><Shield size={17}/><span>Moderation</span></button>}
       </nav>
-      <div className="sidebar-bottom"><div className="impact-card"><div className="impact-icon"><Sparkles size={15}/></div><div><strong>Small signals. Big change.</strong><p>{publicReports.filter(r => r.region === region && r.status === 'resolved').length} issues resolved in your region</p></div><div className="impact-bar"><i style={{ width: `${Math.min(100, 38 + publicReports.filter(r => r.status === 'resolved').length * 6)}%` }}/></div></div><button className="nav-item" onClick={() => setNotice('FourSight helps neighbors turn everyday issues into visible action.')}><CircleHelp size={17}/><span>How it works</span></button><div className="profile-row"><div className="avatar">{admin ? 'CA' : authState.user?.displayName.slice(0,2).toUpperCase() ?? '??'}</div><div className="profile-name"><strong>{authState.user?.displayName ?? 'Guest'}</strong><small>{admin ? 'City operations' : authState.status === 'signed_in' ? 'Community member' : 'Sign in to participate'}</small></div>{authState.status === 'signed_in' && <button className="icon-button" title="Sign out" onClick={() => void authApi.signOut()}><Settings size={16}/></button>}</div>{!backendEnabled && <div className="role-switch"><span className="demo-indicator"/> Demo mode <button onClick={() => { const next = !demoAdmin; setDemoAdmin(next); setAuthState({ status: 'demo', user: { id: next ? 'demo-admin' : 'demo-resident', displayName: next ? 'City admin' : 'Jordan Rivera', role: next ? 'city_admin' : 'resident' } }); setPage(next ? 'queue' : 'map'); }}>Switch to {admin ? 'resident' : 'admin'}</button></div>}</div>
+      <div className="sidebar-bottom"><div className="impact-card"><div className="impact-icon"><Sparkles size={15}/></div><div><strong>Small signals. Big change.</strong><p>{publicReports.filter(r => r.region === region && r.status === 'resolved').length} issues resolved in your region</p></div><div className="impact-bar"><i style={{ width: `${Math.min(100, 38 + publicReports.filter(r => r.status === 'resolved').length * 6)}%` }}/></div></div><button className="nav-item" onClick={() => setNotice('FourSight helps neighbors turn everyday issues into visible action.')}><CircleHelp size={17}/><span>How it works</span></button><div className="profile-row"><div className="avatar">{admin ? 'CA' : authState.user?.displayName.slice(0,2).toUpperCase() ?? '??'}</div><div className="profile-name"><strong>{authState.user?.displayName ?? 'Guest'}</strong><small>{admin ? 'City operations' : authState.status === 'signed_in' ? 'Community member' : 'Sign in to participate'}</small></div><button className="icon-button" title="Settings" aria-label="Settings" aria-current={page === 'settings' ? 'page' : undefined} onClick={() => setPage('settings')}><Settings size={16}/></button></div>{!backendEnabled && <div className="role-switch"><span className="demo-indicator"/> Demo mode <button onClick={() => { const next = !demoAdmin; setDemoAdmin(next); setAuthState({ status: 'demo', user: { id: next ? 'demo-admin' : 'demo-resident', displayName: next ? 'City admin' : 'Jordan Rivera', role: next ? 'city_admin' : 'resident' } }); setPage(next ? 'queue' : 'map'); }}>Switch to {admin ? 'resident' : 'admin'}</button></div>}</div>
     </aside>
     <main className="main-content">
-      <header className="topbar"><div className="breadcrumb">FourSight <span>/</span> {page === 'map' ? 'Community map' : page === 'queue' ? (admin ? 'Operations queue' : 'Reports nearby') : 'Neighborhood forum'}</div><div className="top-actions"><span className="connection-pill"><i/>{backendEnabled ? 'SUPABASE CONNECTED' : 'LOCAL DEMO MODE'}</span>{authState.status !== 'signed_in' && backendEnabled && <button className="secondary-button" onClick={() => setShowAuth(true)}>Sign in</button>}<button className="icon-button notification" onClick={() => setNotice('You’re all caught up.')} aria-label="Notifications"><Bell size={18}/><i/></button><div className="top-avatar">{admin ? 'CA' : authState.user?.displayName.slice(0,2).toUpperCase() ?? '??'}</div></div></header>
-      <label className="mobile-region-picker">Region <select value={region} onChange={event => chooseRegion(event.target.value)}><option value="">Choose region</option>{Object.keys(REGION_CENTERS).map(name => <option key={name} value={name}>{name}</option>)}</select></label>
+      <header className="topbar"><div className="breadcrumb">FourSight <span>/</span> {page === 'map' ? 'Community map' : page === 'queue' ? (admin ? 'Operations queue' : 'Reports nearby') : page === 'forum' ? 'Neighborhood forum' : 'Settings'}</div><div className="top-actions"><span className="connection-pill"><i/>{backendEnabled ? 'SUPABASE CONNECTED' : 'LOCAL DEMO MODE'}</span>{authState.status !== 'signed_in' && backendEnabled && <button className="secondary-button" onClick={() => setShowAuth(true)}>Sign in</button>}<button className="icon-button notification" onClick={() => setNotice('You’re all caught up.')} aria-label="Notifications"><Bell size={18}/><i/></button><div className="top-avatar">{admin ? 'CA' : authState.user?.displayName.slice(0,2).toUpperCase() ?? '??'}</div></div></header>
+      {page !== 'settings' && <label className="mobile-region-picker">Region <select value={region} onChange={event => chooseRegion(event.target.value)}><option value="">Choose region</option>{Object.keys(REGION_CENTERS).map(name => <option key={name} value={name}>{name}</option>)}</select></label>}
       {page === 'map' && <>
         <div className="page-heading"><div><div className="eyebrow"><span className="live-dot"/> LOCAL PULSE <span className="eyebrow-divider">/</span> {region ? region.toUpperCase() : 'NEAR YOU'}</div><h1>See what needs attention.</h1><p>Real issues, real neighbors, visible progress.</p></div><button className="primary-button" onClick={() => !region ? setNotice('Choose a region before reporting.') : authState.status === 'signed_in' || authState.status === 'demo' ? setComposer(true) : setShowAuth(true)}><Plus size={17}/> Report an issue</button></div>
         <div className="stats-grid"><Stat icon={<Radio size={16}/>} label="Community signals" value={String(publicReports.filter(r => r.region === region).length).padStart(2, '0')} change="All reports" tone="blue"/><Stat icon={<Clock3 size={16}/>} label="Being worked on" value={String(publicReports.filter(r => r.region === region && r.status === 'in_progress').length).padStart(2, '0')} change="With city teams" tone="amber"/><Stat icon={<Check size={16}/>} label="Resolved this month" value={String(publicReports.filter(r => r.region === region && r.status === 'resolved').length).padStart(2, '0')} change="Community wins" tone="green"/><Stat icon={<Activity size={16}/>} label="Avg. first response" value="1.8d" change={<><ArrowDownRight size={14}/> 12% this week</>} tone="purple"/></div>
@@ -101,13 +112,14 @@ export default function App() {
           {location && !region && <div className="region-map-hint">Showing your location. Select a supported region to view reports and submit an issue.</div>}
           <div className="map-footer"><span><i className="legend-dot red"/> New <i className="legend-dot amber"/> In progress <i className="legend-dot green"/> Resolved</span><span>Updated just now <span className="footer-sep">·</span> <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">Map data © OpenStreetMap</a></span></div>
         </div>
-        <div className="below-map"><div className="section-title"><div><h2>Community signals <span className="count-badge">{filtered.length}</span></h2><p>What neighbors are seeing around {region}</p></div><button className="text-button" onClick={() => setPage('queue')}>View all reports <ArrowUpRight size={14}/></button></div><div className="signal-list">{filtered.slice(0, 3).map(report => <SignalRow key={report.id} report={report} onClick={() => setSelected(report.id)}/>)}{filtered.length === 0 && <Empty text="No reports match this filter yet."/>}</div></div>
+        <div className="below-map"><div className="section-title"><div><h2>Community signals <span className="count-badge">{filtered.length}</span></h2><p>What neighbors are seeing around {region}</p></div><button className="text-button" onClick={() => { setOpenModerationQueue(false); setPage('queue'); }}>View all reports <ArrowUpRight size={14}/></button></div><div className="signal-list">{filtered.slice(0, 3).map(report => <SignalRow key={report.id} report={report} onClick={() => setSelected(report.id)}/>)}{filtered.length === 0 && <Empty text="No reports match this filter yet."/>}</div></div>
       </>}
       {page === 'queue' && admin && <AdminQueue reports={visibleReports} teams={teamsState} onSelect={report => setSelected(report.id)}/>}
       {page === 'queue' && !admin && <PublicReportsPage reports={publicReports.filter(report => report.region === region)} onSelect={selectReport}/>}
       {page === 'forum' && !region && <div className="subpage"><Empty text="Choose your region to see neighborhood discussions."/></div>}
-      {page === 'forum' && region && community && <CommunityForumPage api={community} session={authState} region={region}/>}
-      {page === 'forum' && region && !community && <CommunityForumPage api={demoCommunity} session={authState} region={region}/>}
+      {page === 'forum' && region && community && <CommunityForumPage api={community} session={authState} region={region} openModerationQueue={openModerationQueue} onModerationQueueChange={setOpenModerationQueue} onSelectReport={selectReport}/>}
+      {page === 'forum' && region && !community && <CommunityForumPage api={demoCommunity} session={authState} region={region} openModerationQueue={openModerationQueue} onModerationQueueChange={setOpenModerationQueue} onSelectReport={selectReport}/>}
+      {page === 'settings' && <AccountSettings authApi={authApi} signedIn={authState.status === 'signed_in'} region={region} regions={Object.keys(REGION_CENTERS)} onRegionChange={chooseRegion} onSignIn={() => setShowAuth(true)} onSignOut={() => setPage('map')} onBack={() => setPage('map')}/>}
     </main>
     {selected && activeReport && <DetailDrawer report={activeReport} admin={admin} update={update} close={() => setSelected(null)} setNotice={setNotice} civic={civic} teams={teamsState} onChanged={refreshReports}/>}
     {composer && <ReportComposer region={region} initialLocation={location} setNotice={setNotice} onClose={() => setComposer(false)} onSubmit={async input => { try { if (civic) { const saved = await civic.createReport(input); let deliveryMessage = 'City delivery is tracked separately.'; if (saved.region === 'Boston') { try { deliveryMessage = (await forwardSavedReportToBoston(saved.databaseId)).message; } catch (deliveryError) { deliveryMessage = deliveryError instanceof Error ? `Boston 311 delivery check failed: ${deliveryError.message}` : 'Boston 311 delivery could not be checked.'; } } setComposer(false); await refreshReports(); setSelected(saved.id); setNotice(`Report ${saved.id} saved. ${deliveryMessage}`); } else { const media = await Promise.all(input.media.map(async item => ({ id: crypto.randomUUID(), kind: item.kind, url: await putLocalMedia(item.file), label: item.label, selectedFrameSeconds: item.selectedFrameSeconds }))); const now = new Date().toISOString(); const report: Report = { ...input, id: `FS-${Math.floor(2050 + Math.random() * 7900)}`, status: 'new', delivery: { state: 'sandbox', message: 'Local demo — not sent to city services.' }, createdAt: now, updatedAt: now, media, transcript: input.transcript ?? '', assignedTeamId: null, reporterId: 'demo-resident', hiddenFromMap: false, hideReason: null, timeline: [{ status: 'new', at: now, actor: authState.user?.displayName ?? 'Resident' }] }; update(d => ({ ...d, reports: [report, ...d.reports] })); setComposer(false); setSelected(report.id); setNotice(`Report ${report.id} added in local demo mode.`); } } catch(error) { setNotice(error instanceof Error ? error.message : 'Could not save report.'); } }}/ >}
@@ -119,16 +131,36 @@ export default function App() {
 void QueuePage;
 void ForumPage;
 
-function createDemoCommunityApi(data: AppData, update: (fn: (current: AppData) => AppData) => void): CommunityDataApi {
-  const flags: ModerationFlag[] = [];
-  const map = (post: ForumPost): CommunityPost => ({ ...post, reportId: null, comments: post.comments.map(comment => ({ ...comment, hidden: false })) });
+function createDemoCommunityApi(data: AppData, update: (fn: (current: AppData) => AppData) => void, state: DemoCommunityState): CommunityDataApi {
+  const map = (post: ForumPost): CommunityPost => ({
+    ...post,
+    reportId: null,
+    hidden: post.hidden || state.hiddenPosts.has(post.id),
+    comments: post.comments.map(comment => ({ ...comment, hidden: state.hiddenComments.has(comment.id) })),
+  });
   return {
     async listPosts(region) { return data.posts.filter(post => post.region === region).map(map); },
     async createPost(input) { const post: ForumPost = { id: crypto.randomUUID(), ...input, author: 'Jordan R.', at: new Date().toISOString(), comments: [], flags: 0, hidden: false }; update(current => ({ ...current, posts: [post, ...current.posts] })); return map(post); },
     async addComment(postId, body) { const comment: CommunityComment = { id: crypto.randomUUID(), body, author: 'Jordan R.', at: new Date().toISOString(), hidden: false }; update(current => ({ ...current, posts: current.posts.map(post => post.id === postId ? { ...post, comments: [...post.comments, comment] } : post) })); return comment; },
-    async flagContent(target, reason) { flags.push({ id: crypto.randomUUID(), target, region: 'Boston', contentPreview: '', reason: reason ?? null, createdAt: new Date().toISOString() }); },
-    async listModerationFlags() { return [...flags]; },
-    async reviewFlag(flagId, action) { const index = flags.findIndex(flag => flag.id === flagId); if (index >= 0 && action === 'dismiss') flags.splice(index, 1); },
+    async flagContent(target, reason) {
+      const post = target.kind === 'post'
+        ? data.posts.find(candidate => candidate.id === target.id)
+        : data.posts.find(candidate => candidate.comments.some(comment => comment.id === target.id));
+      if (!post) throw new Error('The community content could not be found.');
+      const preview = target.kind === 'post'
+        ? `${post.title}: ${post.body}`
+        : post.comments.find(comment => comment.id === target.id)?.body ?? '';
+      state.flags.push({ id: crypto.randomUUID(), target, region: post.region, contentPreview: preview, reason: reason ?? null, createdAt: new Date().toISOString() });
+    },
+    async listModerationFlags(region) { return state.flags.filter(flag => flag.region === region); },
+    async reviewFlag(flagId, action) {
+      const flag = state.flags.find(item => item.id === flagId);
+      if (!flag) throw new Error('This moderation flag is no longer available.');
+      const hiddenTargets = flag.target.kind === 'post' ? state.hiddenPosts : state.hiddenComments;
+      if (action === 'hide') hiddenTargets.add(flag.target.id);
+      if (action === 'restore') hiddenTargets.delete(flag.target.id);
+      if (action === 'dismiss') state.flags.splice(state.flags.indexOf(flag), 1);
+    },
     subscribeCommunity(_region, _listener) { return () => undefined; },
   };
 }

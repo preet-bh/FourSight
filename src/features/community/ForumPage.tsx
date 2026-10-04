@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUpRight, Flag, MessageCircle, Plus, Send, Shield, X } from 'lucide-react';
+import { Flag, MessageCircle, Plus, Send, Shield, X } from 'lucide-react';
 import type { AuthState, CommunityComment, CommunityDataApi, CommunityPost, ModerationFlag } from '../../platform/contracts';
 import './community.css';
 
@@ -18,7 +18,14 @@ type ForumTopic = (typeof COMMUNITY_TOPICS)[number];
 type PostDraft = { topic: Exclude<ForumTopic, 'All topics'>; title: string; body: string; reportId: string };
 type ReviewAction = 'hide' | 'restore' | 'dismiss';
 
-export type ForumPageProps = { api: CommunityDataApi; session: AuthState; region: string };
+export type ForumPageProps = {
+  api: CommunityDataApi;
+  session: AuthState;
+  region: string;
+  openModerationQueue?: boolean;
+  onModerationQueueChange?: (open: boolean) => void;
+  onSelectReport?: (reportId: string) => void;
+};
 
 export type CommunitySnapshot = { posts: CommunityPost[]; flags: ModerationFlag[] };
 
@@ -102,7 +109,7 @@ export async function moderateCommunityContent(
 
 const emptyDraft = (): PostDraft => ({ topic: 'Cost of living', title: '', body: '', reportId: '' });
 
-export function ForumPage({ api, session, region }: ForumPageProps) {
+export function ForumPage({ api, session, region, openModerationQueue = false, onModerationQueueChange, onSelectReport }: ForumPageProps) {
   const moderator = canModerateCommunity(session);
   const canParticipate = canParticipateCommunity(session);
   const [posts, setPosts] = useState<CommunityPost[]>([]);
@@ -115,12 +122,14 @@ export function ForumPage({ api, session, region }: ForumPageProps) {
   const [draft, setDraft] = useState<PostDraft>(emptyDraft);
   const [commenting, setCommenting] = useState<string | null>(null);
   const [commentDraft, setCommentDraft] = useState('');
-  const [showModeration, setShowModeration] = useState(false);
+  const [showModeration, setShowModeration] = useState(openModerationQueue);
   const [busy, setBusy] = useState(false);
   const requestVersion = useRef(0);
   const currentRegion = useRef(region);
   currentRegion.current = region;
   const [moderationRegion, setModerationRegion] = useState<string | null>(null);
+
+  useEffect(() => { setShowModeration(openModerationQueue && moderator); }, [moderator, openModerationQueue]);
 
   const refresh = useCallback(async () => {
     if (currentRegion.current !== region) return;
@@ -244,7 +253,11 @@ export function ForumPage({ api, session, region }: ForumPageProps) {
       <div className="filter-tabs topic-tabs" aria-label="Filter by topic">
         {COMMUNITY_TOPICS.map(item => <button key={item} className={topic === item ? 'selected' : ''} aria-pressed={topic === item} onClick={() => setTopic(item)}>{item}</button>)}
       </div>
-      {moderator && <button className={`secondary-button ${showModeration ? 'selected-filter' : ''}`} aria-pressed={showModeration} onClick={() => setShowModeration(value => !value)}><Shield size={14}/>{showModeration ? 'Hide moderation queue' : 'Moderation queue'} <span className="flag-count">{visibleModerationFlags.length}</span></button>}
+      {moderator && <button className={`secondary-button ${showModeration ? 'selected-filter' : ''}`} aria-pressed={showModeration} onClick={() => {
+        const next = !showModeration;
+        setShowModeration(next);
+        onModerationQueueChange?.(next);
+      }}><Shield size={14}/>{showModeration ? 'Hide moderation queue' : 'Moderation queue'} <span className="flag-count">{visibleModerationFlags.length}</span></button>}
     </div>
 
     {!canParticipate && <p className="forum-signin-prompt" role="status">{SIGN_IN_PROMPT} Use Sign in in the header to join the conversation.</p>}
@@ -269,12 +282,13 @@ export function ForumPage({ api, session, region }: ForumPageProps) {
       {loading ? <p className="forum-empty">Loading neighborhood discussions…</p>
         : visiblePosts.length === 0 ? <p className="forum-empty">No conversations here yet. Start one with your neighbors.</p>
           : visiblePosts.map(post => <article key={post.id} className={`forum-post ${post.hidden ? 'hidden-post' : ''}`}>
-            <div className="post-vote"><button aria-label="Support this discussion"><ArrowUpRight size={15}/></button><strong>{Math.max(1, post.comments.length + 2)}</strong><small>support</small></div>
             <div className="post-content">
               <div className="post-topic">{post.topic} <span>·</span> {post.region}</div>
               <h2>{post.title}</h2>
               <p>{post.body}</p>
-              {post.reportId && <a className="report-reference" href={`#report-${encodeURIComponent(post.reportId)}`}>Discussing report {post.reportId}</a>}
+              {post.reportId && (onSelectReport
+                ? <button type="button" className="report-reference" onClick={() => post.reportId && onSelectReport(post.reportId)}>Discussing report {post.reportId}</button>
+                : <span className="report-reference">Discussing report {post.reportId}</span>)}
               <div className="post-meta"><div className="mini-avatar" aria-hidden="true">{post.author.slice(0, 1)}</div><span>{post.author}</span><span>·</span><time dateTime={post.at}>{new Date(post.at).toLocaleDateString()}</time>
                 <button onClick={() => {
                   if (!canParticipate) { setNotice(SIGN_IN_PROMPT); return; }

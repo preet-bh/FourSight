@@ -42,6 +42,12 @@ export function createAuthApi(client: SupabaseClient | null = supabase): AuthApi
       return stateForUser(configured, data.session?.user ?? null);
     },
 
+    async getEmail() {
+      const { data, error } = await requiredClient(client).auth.getUser();
+      if (error) throw error;
+      return data.user?.email ?? null;
+    },
+
     subscribe(listener) {
       if (!client) {
         listener({ status: 'signed_out', user: null });
@@ -98,6 +104,13 @@ export function createAuthApi(client: SupabaseClient | null = supabase): AuthApi
       if (!validateEmail(input.email)) throw new Error('Enter a valid email address.');
       if (!input.password) throw new Error('Enter your password.');
       const { error } = await requiredClient(client).auth.signInWithPassword({ email: input.email.trim(), password: input.password });
+      if (error) throw error;
+    },
+
+    async updateEmail(email) {
+      const normalizedEmail = email.trim();
+      if (!validateEmail(normalizedEmail)) throw new Error('Enter a valid email address.');
+      const { error } = await requiredClient(client).auth.updateUser({ email: normalizedEmail });
       if (error) throw error;
     },
 

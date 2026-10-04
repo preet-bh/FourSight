@@ -63,9 +63,11 @@ export type ModerationFlag = {
 
 export interface AuthApi {
   getState(): Promise<AuthState>;
+  getEmail(): Promise<string | null>;
   subscribe(listener: (state: AuthState) => void): () => void;
   signUp(input: { displayName: string; email: string; password: string }): Promise<{ confirmationRequired: true }>;
   signIn(input: { email: string; password: string }): Promise<void>;
+  updateEmail(email: string): Promise<void>;
   signOut(): Promise<void>;
 }
 
