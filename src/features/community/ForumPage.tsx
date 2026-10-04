@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowUpRight, Flag, MessageCircle, Plus, Send, Shield, X } from 'lucide-react';
 import type { AuthState, CommunityComment, CommunityDataApi, CommunityPost, ModerationFlag } from '../../platform/contracts';
 import './community.css';
@@ -19,6 +19,34 @@ type PostDraft = { topic: Exclude<ForumTopic, 'All topics'>; title: string; body
 type ReviewAction = 'hide' | 'restore' | 'dismiss';
 
 export type ForumPageProps = { api: CommunityDataApi; session: AuthState; region: string };
+
+export type CommunitySnapshot = { posts: CommunityPost[]; flags: ModerationFlag[] };
+
+export async function loadCommunitySnapshot(
+  api: CommunityDataApi,
+  region: string,
+  includeModeration: boolean,
+  isCurrent: () => boolean,
+): Promise<CommunitySnapshot | null> {
+  const [posts, flags] = await Promise.all([
+    api.listPosts(region),
+    includeModeration ? api.listModerationFlags(region) : Promise.resolve([]),
+  ]);
+  if (!isCurrent()) return null;
+  return {
+    posts: posts.filter(post => post.region === region),
+    flags: flags.filter(flag => flag.region === region),
+  };
+}
+
+export function reconcileCommunityComments(comments: CommunityComment[], incoming: CommunityComment): CommunityComment[] {
+  return comments.some(comment => comment.id === incoming.id) ? comments : [...comments, incoming];
+}
+
+export function isModeratedTargetHidden(flag: ModerationFlag, posts: CommunityPost[]): boolean {
+  if (flag.target.kind === 'post') return posts.some(post => post.id === flag.target.id && post.hidden);
+  return posts.some(post => post.comments.some(comment => comment.id === flag.target.id && comment.hidden));
+}
 
 export function canModerateCommunity(session: AuthState): boolean {
   return (session.status === 'signed_in' || session.status === 'demo')
@@ -75,59 +103,54 @@ export function ForumPage({ api, session, region }: ForumPageProps) {
   const [commentDraft, setCommentDraft] = useState('');
   const [showModeration, setShowModeration] = useState(false);
   const [busy, setBusy] = useState(false);
+  const requestVersion = useRef(0);
+  const currentRegion = useRef(region);
+  currentRegion.current = region;
+  const [moderationRegion, setModerationRegion] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
+    if (currentRegion.current !== region) return;
+    const version = ++requestVersion.current;
     setLoading(true);
     setError('');
     try {
-      const [nextPosts, nextFlags] = await Promise.all([
-        api.listPosts(region),
-        moderator ? api.listModerationFlags(region) : Promise.resolve([]),
-      ]);
-      setPosts(nextPosts);
-      setModerationFlags(nextFlags);
+      const snapshot = await loadCommunitySnapshot(api, region, moderator, () =>
+        requestVersion.current === version && currentRegion.current === region,
+      );
+      if (snapshot) {
+        setPosts(snapshot.posts);
+        setModerationFlags(snapshot.flags);
+        setModerationRegion(region);
+      }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not load neighborhood discussions.');
+      if (requestVersion.current === version && currentRegion.current === region) {
+        setError(cause instanceof Error ? cause.message : 'Could not load neighborhood discussions.');
+      }
     } finally {
-      setLoading(false);
+      if (requestVersion.current === version && currentRegion.current === region) setLoading(false);
     }
   }, [api, moderator, region]);
 
   useEffect(() => {
     let active = true;
-    const load = async () => {
-      setLoading(true);
-      setError('');
-      try {
-        const [nextPosts, nextFlags] = await Promise.all([
-          api.listPosts(region),
-          moderator ? api.listModerationFlags(region) : Promise.resolve([]),
-        ]);
-        if (active) {
-          setPosts(nextPosts);
-          setModerationFlags(nextFlags);
-        }
-      } catch (cause) {
-        if (active) setError(cause instanceof Error ? cause.message : 'Could not load neighborhood discussions.');
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
+    setPosts([]);
+    setModerationFlags([]);
+    setModerationRegion(null);
     const unsubscribe = api.subscribeCommunity(region, nextPosts => {
-      if (active) setPosts(nextPosts);
+      if (active && currentRegion.current === region) setPosts(nextPosts.filter(post => post.region === region));
     });
-    void load();
-    return () => { active = false; unsubscribe(); };
-  }, [api, moderator, region]);
+    void refresh();
+    return () => { active = false; requestVersion.current++; unsubscribe(); };
+  }, [api, moderator, region, refresh]);
 
   const visiblePosts = useMemo(
     () => filterCommunityPosts(posts, region, topic, moderator && showModeration),
     [moderator, posts, region, showModeration, topic],
   );
 
-  const refreshModerationFlags = async () => {
-    if (moderator) setModerationFlags(await api.listModerationFlags(region));
-  };
+  const visibleModerationFlags = moderationRegion === region
+    ? moderationFlags.filter(flag => flag.region === region)
+    : [];
 
   const postDiscussion = async () => {
     setBusy(true);
@@ -150,7 +173,9 @@ export function ForumPage({ api, session, region }: ForumPageProps) {
     setError('');
     try {
       const comment = await submitCommunityComment(api, postId, commentDraft);
-      setPosts(current => current.map(post => post.id === postId ? { ...post, comments: [...post.comments, comment] } : post));
+      setPosts(current => current.map(post => post.id === postId
+        ? { ...post, comments: reconcileCommunityComments(post.comments, comment) }
+        : post));
       setCommentDraft('');
       setCommenting(null);
       setNotice('Reply posted.');
@@ -165,7 +190,7 @@ export function ForumPage({ api, session, region }: ForumPageProps) {
     setError('');
     try {
       await flagCommunityContent(api, target);
-      await refreshModerationFlags();
+      await refresh();
       setNotice('Flag sent to moderators for review.');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not flag this content.');
@@ -176,7 +201,7 @@ export function ForumPage({ api, session, region }: ForumPageProps) {
     setError('');
     try {
       await moderateCommunityContent(api, session, flag.id, action);
-      await Promise.all([refresh(), refreshModerationFlags()]);
+      await refresh();
       setNotice(action === 'hide' ? 'Content hidden from the forum.' : action === 'restore' ? 'Content restored.' : 'Flag dismissed.');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not update this moderation flag.');
@@ -205,19 +230,20 @@ export function ForumPage({ api, session, region }: ForumPageProps) {
       <div className="filter-tabs topic-tabs" aria-label="Filter by topic">
         {COMMUNITY_TOPICS.map(item => <button key={item} className={topic === item ? 'selected' : ''} aria-pressed={topic === item} onClick={() => setTopic(item)}>{item}</button>)}
       </div>
-      {moderator && <button className={`secondary-button ${showModeration ? 'selected-filter' : ''}`} aria-pressed={showModeration} onClick={() => setShowModeration(value => !value)}><Shield size={14}/>{showModeration ? 'Hide moderation queue' : 'Moderation queue'} <span className="flag-count">{moderationFlags.length}</span></button>}
+      {moderator && <button className={`secondary-button ${showModeration ? 'selected-filter' : ''}`} aria-pressed={showModeration} onClick={() => setShowModeration(value => !value)}><Shield size={14}/>{showModeration ? 'Hide moderation queue' : 'Moderation queue'} <span className="flag-count">{visibleModerationFlags.length}</span></button>}
     </div>
 
     {error && <div className="forum-error" role="alert"><span>{error}</span><button className="secondary-button" onClick={() => void refresh()}>Try again</button></div>}
     {notice && <div className="forum-notice" role="status">{notice}<button aria-label="Dismiss notice" onClick={() => setNotice('')}><X size={14}/></button></div>}
 
     {moderator && showModeration && <section className="moderation-queue" aria-label="Moderation queue">
-      <h2><Shield size={16}/> Moderation queue <span>{moderationFlags.length}</span></h2>
-      {moderationFlags.length === 0 ? <p className="forum-empty">No content is waiting for review.</p> : moderationFlags.map(flag => <article className="moderation-flag" key={flag.id}>
-        <div><strong>{flag.target.kind === 'post' ? 'Post' : 'Comment'} flagged</strong><p>{flag.contentPreview}</p><small>{flag.reason || 'No reason provided'} · {new Date(flag.createdAt).toLocaleDateString()}</small></div>
+      <h2><Shield size={16}/> Moderation queue <span>{visibleModerationFlags.length}</span></h2>
+      {visibleModerationFlags.length === 0 ? <p className="forum-empty">No content is waiting for review.</p> : visibleModerationFlags.map(flag => <article className="moderation-flag" key={flag.id}>
+        <div><strong>{flag.target.kind === 'post' ? 'Post' : 'Comment'} {isModeratedTargetHidden(flag, posts) ? 'hidden' : 'flagged'}</strong><p>{flag.contentPreview}</p><small>{flag.reason || 'No reason provided'} · {new Date(flag.createdAt).toLocaleDateString()}</small></div>
         <div className="moderation-actions">
-          <button onClick={() => void reviewFlag(flag, 'hide')}>Hide</button>
-          <button onClick={() => void reviewFlag(flag, 'restore')}>Restore</button>
+          {isModeratedTargetHidden(flag, posts)
+            ? <button onClick={() => void reviewFlag(flag, 'restore')}>Restore</button>
+            : <button onClick={() => void reviewFlag(flag, 'hide')}>Hide</button>}
           <button onClick={() => void reviewFlag(flag, 'dismiss')}>Dismiss</button>
         </div>
       </article>)}

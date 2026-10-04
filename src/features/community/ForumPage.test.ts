@@ -11,6 +11,9 @@ import {
   submitCommunityComment,
   submitCommunityPost,
   moderateCommunityContent,
+  loadCommunitySnapshot,
+  reconcileCommunityComments,
+  isModeratedTargetHidden,
 } from './ForumPage';
 
 const makePost = (overrides: Partial<CommunityPost> = {}): CommunityPost => ({
@@ -43,6 +46,54 @@ describe('community forum', () => {
     const posts = [makePost(), makePost({ id: 'post-2', region: 'Detroit' }), makePost({ id: 'post-3', hidden: true })];
     expect(filterCommunityPosts(posts, 'Boston', 'All topics', false).map(post => post.id)).toEqual(['post-1']);
     expect(filterCommunityPosts(posts, 'Boston', 'All topics', true).map(post => post.id)).toEqual(['post-1', 'post-3']);
+  });
+
+  it('scopes loaded posts and moderation flags to the requested region', async () => {
+    const api = apiStub();
+    vi.mocked(api.listPosts).mockResolvedValue([makePost(), makePost({ id: 'other', region: 'Detroit' })]);
+    vi.mocked(api.listModerationFlags).mockResolvedValue([makeFlag(), makeFlag({ id: 'other-flag', region: 'Detroit' })]);
+    const snapshot = await loadCommunitySnapshot(api, 'Boston', true, () => true);
+    expect(snapshot?.posts.map(post => post.id)).toEqual(['post-1']);
+    expect(snapshot?.flags.map(flag => flag.id)).toEqual(['flag-1']);
+  });
+
+  it('ignores an asynchronous region snapshot after its request becomes stale', async () => {
+    const api = apiStub();
+    let resolvePosts!: (posts: CommunityPost[]) => void;
+    let resolveFlags!: (flags: ModerationFlag[]) => void;
+    vi.mocked(api.listPosts).mockReturnValue(new Promise(resolve => { resolvePosts = resolve; }));
+    vi.mocked(api.listModerationFlags).mockReturnValue(new Promise(resolve => { resolveFlags = resolve; }));
+    let current = true;
+    const pending = loadCommunitySnapshot(api, 'Boston', true, () => current);
+    current = false;
+    resolvePosts([makePost()]);
+    resolveFlags([makeFlag()]);
+    await expect(pending).resolves.toBeNull();
+  });
+
+  it('does not duplicate a comment delivered by subscription before submission resolves', async () => {
+    const api = apiStub();
+    let resolveComment!: (comment: { id: string; body: string; author: string; at: string; hidden: boolean }) => void;
+    vi.mocked(api.addComment).mockReturnValue(new Promise(resolve => { resolveComment = resolve; }));
+    let comments: { id: string; body: string; author: string; at: string; hidden: boolean }[] = [];
+    const pending = submitCommunityComment(api, 'post-1', 'I agree.').then(returned => {
+      comments = reconcileCommunityComments(comments, returned);
+    });
+    const subscribed = { id: 'c1', body: 'I agree.', author: 'Alex', at: 'now', hidden: false };
+    comments = [subscribed];
+    resolveComment(subscribed);
+    await pending;
+    expect(comments).toEqual([subscribed]);
+  });
+
+  it('identifies hidden post and comment targets so moderators can restore them', () => {
+    const hiddenPost = makePost({ hidden: true });
+    const hiddenComment = { id: 'comment-1', body: 'A private detail.', author: 'Alex', at: 'now', hidden: true };
+    const postFlag = makeFlag();
+    const commentFlag = makeFlag({ id: 'comment-flag', target: { kind: 'comment', id: 'comment-1' } });
+    expect(isModeratedTargetHidden(postFlag, [hiddenPost])).toBe(true);
+    expect(isModeratedTargetHidden(commentFlag, [makePost({ comments: [hiddenComment] })])).toBe(true);
+    expect(isModeratedTargetHidden(postFlag, [makePost()])).toBe(false);
   });
 
   it('creates a post through the API with its region and optional report reference', async () => {

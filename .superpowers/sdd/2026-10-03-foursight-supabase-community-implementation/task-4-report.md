@@ -21,3 +21,16 @@ Implemented in `src/features/community/ForumPage.tsx`, `ForumPage.test.ts`, and 
 ## Concerns
 
 The project has no DOM test environment installed. Action tests exercise the exported API workflows, and the moderator visibility test uses server-rendered markup; browser event sequences are not simulated in this task.
+
+## Review fixes
+
+- Scoped fetched post and flag records to the requested region. Region changes clear the queue state, and request-version plus current-region guards prevent obsolete success, error, or loading updates from replacing newer state. Subscription updates are also region-checked.
+- Comment responses are reconciled by comment ID, so a subscription update arriving before the submission response does not duplicate the comment.
+- Moderation queue controls now show Hide for visible targets and Restore for hidden post or comment targets. The parent confirmed the persistence adapter retains flags in `pending` and `hidden` states; restore remains reachable with the original flag ID until restore or dismissal. The data owner was asked to implement region-scoped pending/hidden queue results for both posts and comments.
+- Removed the duplicate moderation refresh; one refresh now reconciles posts and flags.
+
+## Review-fix verification
+
+- RED: new region-scope, stale-request, and subscription-before-response tests failed while the helpers were absent; the hidden-target test also failed before its helper was added.
+- GREEN: `npm test -- --run src/features/community/ForumPage.test.ts` — 11 tests passed.
+- `npm run build` — TypeScript and Vite production build passed.
