@@ -105,6 +105,38 @@ describe('auth service', () => {
     expect(listener).toHaveBeenCalledTimes(2);
   });
 
+  it('ignores an initial session snapshot and profile lookup after a newer sign-out', async () => {
+    let resolveInitialSession!: (value: { data: { session: { user: { id: string; user_metadata: { display_name: string } } } }; error: null }) => void;
+    let resolveProfile!: (value: { data: { display_name: string; role: string }; error: null }) => void;
+    let onChange: ((event: string, session: unknown) => void) | undefined;
+    const initialSession = new Promise<{ data: { session: { user: { id: string; user_metadata: { display_name: string } } } }; error: null }>(resolve => { resolveInitialSession = resolve; });
+    const profileResult = new Promise<{ data: { display_name: string; role: string }; error: null }>(resolve => { resolveProfile = resolve; });
+    const { client } = makeClient({
+      auth: {
+        getSession: vi.fn(() => initialSession),
+        onAuthStateChange: vi.fn((callback: (event: string, session: unknown) => void) => {
+          onChange = callback;
+          return { data: { subscription: { unsubscribe: vi.fn() } } };
+        }),
+      },
+      profileQuery: { maybeSingle: vi.fn(() => profileResult) },
+    });
+    const api = createAuthApi(client as never);
+    const listener = vi.fn();
+    api.subscribe(listener);
+
+    onChange?.('SIGNED_IN', { user: { id: 'user-1', user_metadata: { display_name: 'Ari' } } });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    onChange?.('SIGNED_OUT', null);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    resolveInitialSession({ data: { session: { user: { id: 'user-1', user_metadata: { display_name: 'Ari' } } } }, error: null });
+    resolveProfile({ data: { display_name: 'Ari Admin', role: 'city_admin' }, error: null });
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(listener).toHaveBeenLastCalledWith({ status: 'signed_out', user: null });
+    expect(listener).not.toHaveBeenCalledWith(expect.objectContaining({ status: 'signed_in' }));
+  });
+
   it('signs out through Supabase Auth', async () => {
     const { client, auth } = makeClient();
     await createAuthApi(client as never).signOut();

@@ -17,6 +17,14 @@ Implemented the email/password auth service and reusable accessible auth panel i
 - `npm test` — 3 test files passed, 13 tests passed.
 - `npm run build` — TypeScript and Vite production build passed.
 
+## Review fix: stale initial session race
+
+- Added `ignores an initial session snapshot and profile lookup after a newer sign-out`, which holds the initial session and profile reads open, emits a newer sign-out, then resolves the stale reads.
+- RED: the focused auth test failed because the final observed state was the stale `city_admin` session.
+- GREEN: `npm test -- src/features/auth/auth-service.test.ts` — 7 tests passed.
+- Subscription generations are now assigned when auth events arrive; both session snapshots and profile results publish only while their captured generation is current. `AuthPanel` now uses the subscription as its single state stream and no longer races a separate `getState()` call.
+- `npm run build` — TypeScript and Vite production build passed after the fix.
+
 ## Files
 
 - `src/features/auth/AuthPanel.tsx`

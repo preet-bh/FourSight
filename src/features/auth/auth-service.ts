@@ -50,17 +50,25 @@ export function createAuthApi(client: SupabaseClient | null = supabase): AuthApi
 
       let active = true;
       let revision = 0;
-      const emit = async (user: User | null) => {
-        const currentRevision = ++revision;
+      const emit = async (currentRevision: number, user: User | null) => {
         const state = await stateForUser(client, user);
         if (active && currentRevision === revision) listener(state);
       };
-      void client.auth.getSession().then(({ data }) => emit(data.session?.user ?? null)).catch(() => {
-        if (active) listener({ status: 'signed_out', user: null });
+      const initialRevision = revision;
+      const initialSession = client.auth.getSession();
+      void initialSession.then(({ data, error }) => {
+        if (error) {
+          if (active && initialRevision === revision) listener({ status: 'signed_out', user: null });
+          return;
+        }
+        void emit(initialRevision, data.session?.user ?? null);
+      }).catch(() => {
+        if (active && initialRevision === revision) listener({ status: 'signed_out', user: null });
       });
       const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
+        const eventRevision = ++revision;
         // Defer profile I/O until Supabase finishes its auth callback and releases its lock.
-        queueMicrotask(() => { void emit(session?.user ?? null); });
+        queueMicrotask(() => { void emit(eventRevision, session?.user ?? null); });
       });
       return () => {
         active = false;

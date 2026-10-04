@@ -5,8 +5,6 @@ import './auth.css';
 type AuthPanelProps = { authApi: AuthApi };
 type Mode = 'sign_in' | 'sign_up';
 
-const signedOut: AuthState = { status: 'signed_out', user: null };
-
 export default function AuthPanel({ authApi }: AuthPanelProps) {
   const [state, setState] = useState<AuthState>({ status: 'loading', user: null });
   const [mode, setMode] = useState<Mode>('sign_in');
@@ -20,7 +18,6 @@ export default function AuthPanel({ authApi }: AuthPanelProps) {
   useEffect(() => {
     let active = true;
     const unsubscribe = authApi.subscribe(next => { if (active) setState(next); });
-    void authApi.getState().then(next => { if (active) setState(next); }).catch(() => { if (active) setState(signedOut); });
     return () => { active = false; unsubscribe(); };
   }, [authApi]);
 
