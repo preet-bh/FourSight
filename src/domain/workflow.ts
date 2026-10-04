@@ -21,10 +21,6 @@ export function transitionReport(report: Report, status: TicketStatus, note?: st
   return { ...report, status, updatedAt: at, timeline: [...report.timeline, { status, at, ...(note?.trim() ? { note: note.trim() } : {}), actor }] };
 }
 
-export function isBostonReport(report: Pick<Report, 'region'>) {
-  return report.region.trim().toLowerCase().startsWith('boston');
-}
-
 export function assignTeam(report: Report, teamId: string | null): Report {
   return { ...report, assignedTeamId: teamId, updatedAt: new Date().toISOString() };
 }

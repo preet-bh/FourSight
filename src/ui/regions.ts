@@ -1,5 +1,5 @@
+export const HOME_REGION = 'Dearborn';
 export const REGION_CENTERS: Record<string, [number, number]> = {
-  Boston: [42.355, -71.065],
   Dearborn: [42.3223, -83.1763],
 };
 
@@ -19,10 +19,5 @@ export function regionNear([latitude, longitude]: [number, number]): string | nu
 }
 
 export function savedRegion(): string {
-  try {
-    const value = localStorage.getItem('foursight:region') ?? '';
-    return value in REGION_CENTERS ? value : '';
-  } catch {
-    return '';
-  }
+  return HOME_REGION;
 }

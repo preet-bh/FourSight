@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { CommunityComment, CommunityDataApi, CommunityPost, CivicDataApi, ModerationFlag, ModerationTarget, PublicReportRecord, StaffReportRecord } from './contracts';
 import type { DeliveryState, ReportMedia, Team, TicketStatus } from '../domain/types';
 import { supabase } from './backend';
+import { HOME_REGION } from '../ui/regions';
 
 type DbRow = Record<string, any>;
 const REPORT_FIELDS = 'id,public_id,reporter_display_name,title,description,confirmed_transcript,category,region,latitude,longitude,status,assigned_team_id,created_at,updated_at';
@@ -37,9 +38,9 @@ function mapReportBase(row: DbRow, mediaRows: DbRow[] = [], eventRows: DbRow[] =
     id: String(row.public_id), databaseId: String(row.id), reporterName: row.reporter_display_name || 'Resident',
     title: row.title, description: row.description, category: row.category, status: row.status as TicketStatus,
     delivery: {
-      state: (delivery.state || 'pending') as DeliveryState,
+      state: (delivery.state || 'sandbox') as DeliveryState,
       ...(delivery.external_reference ? { reference: delivery.external_reference } : {}),
-      ...(delivery.message ? { message: delivery.message } : {}),
+      message: delivery.message || 'Tracked in FourSight. City delivery is not connected yet.',
     },
     region: row.region, location: { lat: Number(row.latitude), lng: Number(row.longitude) },
     createdAt: row.created_at, updatedAt: row.updated_at, media,
@@ -220,7 +221,7 @@ export function createSupabaseDataApis(client: SupabaseClient): { civic: CivicDa
       return rowsToPublic([row], associations, signedMedia)[0];
     },
     async listTeams() {
-      const rows = await dataOrThrow<DbRow[]>(client.from('maintenance_teams').select('id,name,category').order('name'));
+      const rows = await dataOrThrow<DbRow[]>(client.from('maintenance_teams').select('id,name,category').eq('region', HOME_REGION).order('name'));
       return rows.map((row: DbRow): Team => ({ id: row.id, name: row.name, category: row.category }));
     },
     async assignTeam(databaseId, teamId) {

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { publicReport, canTransition, transitionReport, isBostonReport, hideReport, assignTeam } from './workflow';
+import { publicReport, canTransition, transitionReport, hideReport, assignTeam } from './workflow';
 import type { Report } from './types';
 
 const report: Report = {
   id: 'r1', title: 'Broken streetlight', description: 'Dark at night', category: 'Lighting',
-  status: 'new', delivery: { state: 'sandbox' }, region: 'Boston', location: { lat: 42.36, lng: -71.06 },
+  status: 'new', delivery: { state: 'sandbox' }, region: 'Dearborn', location: { lat: 42.3223, lng: -83.1763 },
   createdAt: '2026-10-03T12:00:00.000Z', updatedAt: '2026-10-03T12:00:00.000Z',
   media: [], transcript: '', assignedTeamId: null, reporterId: 'private-user-id',
   hiddenFromMap: false, hideReason: null, timeline: [],
@@ -26,11 +26,9 @@ describe('ticket workflow', () => {
     });
   });
 
-  it('keeps app status separate from Boston delivery eligibility', () => {
+  it('keeps app status separate from city delivery state', () => {
     expect(report.status).toBe('new');
     expect(report.delivery.state).toBe('sandbox');
-    expect(isBostonReport(report)).toBe(true);
-    expect(isBostonReport({ ...report, region: 'Dearborn' })).toBe(false);
   });
 
   it('keeps hidden tickets in the staff record and requires an auditable reason', () => {

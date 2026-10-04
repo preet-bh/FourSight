@@ -7,9 +7,6 @@ import './account-settings.css';
 type AccountSettingsProps = {
   authApi: AuthApi;
   signedIn: boolean;
-  region: string;
-  regions: string[];
-  onRegionChange: (region: string) => void;
   onSignIn: () => void;
   onSignOut: () => void;
   onBack: () => void;
@@ -18,9 +15,6 @@ type AccountSettingsProps = {
 export default function AccountSettings({
   authApi,
   signedIn,
-  region,
-  regions,
-  onRegionChange,
   onSignIn,
   onSignOut,
   onBack,
@@ -99,7 +93,7 @@ export default function AccountSettings({
       <div>
         <div className="eyebrow">PREFERENCES & ACCOUNT</div>
         <h1 id="account-settings-title">Settings</h1>
-        <p>Manage your region and account details.</p>
+        <p>Manage your FourSight account.</p>
       </div>
       <button type="button" className="secondary-button" onClick={onBack}><ArrowLeft size={15}/>Back to map</button>
     </header>
@@ -107,14 +101,8 @@ export default function AccountSettings({
     <section className="settings-card" aria-labelledby="region-setting-title">
       <div className="settings-card-icon"><MapPin size={17}/></div>
       <div className="settings-card-content">
-        <h2 id="region-setting-title">Preferred region</h2>
-        <p>Your selection sets the community map and discussions you see.</p>
-        <label className="settings-field">Region
-          <select value={region} onChange={event => onRegionChange(event.target.value)}>
-            {!region && <option value="">Choose a region</option>}
-            {regions.map(name => <option key={name} value={name}>{name}</option>)}
-          </select>
-        </label>
+        <h2 id="region-setting-title">Dearborn community board</h2>
+        <p>Reports and discussions are focused on Dearborn, Michigan.</p>
       </div>
     </section>
 
