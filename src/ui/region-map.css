@@ -43,7 +43,7 @@
   background: #10141b;
 }
 
-.report-location-map { height: 245px; width: 100%; cursor: crosshair; }
+.report-location-picker .report-location-map { height: 245px; width: 100%; cursor: crosshair; }
 .report-location-marker { background: #a895ff; }
 .report-location-help {
   display: flex;
@@ -58,6 +58,6 @@
 .report-location-help .secondary-button { flex: none; padding: 6px 9px; font-size: 10px; }
 
 @media (max-width: 520px) {
-  .report-location-map { height: 220px; }
+  .report-location-picker .report-location-map { height: 220px; }
   .report-location-help { align-items: flex-start; flex-direction: column; }
 }
