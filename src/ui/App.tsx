@@ -9,11 +9,10 @@ import AuthPanel from '../features/auth/AuthPanel';
 import { authApi } from '../features/auth/auth-service';
 import { backendEnabled } from '../platform/backend';
 import { civicDataApi, communityDataApi } from '../platform/data';
-import type { AuthState, StaffReportRecord, NewReportInput, CivicDataApi, CommunityDataApi, CommunityPost, CommunityComment, ModerationFlag } from '../platform/contracts';
+import type { AuthState, StaffReportRecord, CivicDataApi, CommunityDataApi, CommunityPost, CommunityComment, ModerationFlag } from '../platform/contracts';
 import { ForumPage as CommunityForumPage } from '../features/community/ForumPage';
 import { AdminQueue, AdminTicketControls, assignAdminTeam, resolveAdminTicket, setAdminTicketVisibility, transitionAdminTicket } from '../features/admin';
-import MediaEvidenceEditor, { emptyDraft, type MediaEvidenceDraft } from '../features/media/MediaEvidenceEditor';
-import { toReportEvidence } from './report-evidence';
+import ReportComposer from './ReportComposer';
 import './media-editor.css';
 import { subscribeToAuthState } from './auth-subscription';
 import { REGION_CENTERS, regionNear, savedRegion } from './regions';
@@ -159,30 +158,6 @@ function DetailDrawer({report,admin,update,close,setNotice,civic,teams:teamOptio
 
 function MediaView({media}:{media:ReportMedia}){const [url,setUrl]=useState(media.url);useEffect(()=>{let live=true;let objectUrl='';if(media.url.startsWith('local-media:'))void resolveLocalMedia(media.url).then(value=>{if(live){objectUrl=value;setUrl(value);}});return()=>{live=false;if(objectUrl)URL.revokeObjectURL(objectUrl);};},[media.url]);return media.kind==='video'?<video className="report-media" controls src={url}/>:<img className="report-media" src={url} alt={media.label??'Resident evidence'}/>;}
 
-function ReportComposer({region,initialLocation,onClose,onSubmit,setNotice}:{region:string;initialLocation:[number,number]|null;onClose:()=>void;onSubmit:(input:NewReportInput)=>void;setNotice:(s:string)=>void}) {
-  const [evidence,setEvidence]=useState<MediaEvidenceDraft>(emptyDraft);
-  const [title,setTitle]=useState('');
-  const [category,setCategory]=useState('Street & sidewalk');
-  const [busy,setBusy]=useState(false);
-  const [coords,setCoords]=useState<[number,number]>(initialLocation??REGION_CENTERS[region]);
-  const [consent,setConsent]=useState(false);
-
-  const submit=async()=>{
-    if(!evidence.mediaFile){setNotice('Attach a photo or short video before submitting.');return;}
-    if(evidence.mediaKind==='video'&&evidence.transcriptDraft.trim()&&!evidence.transcriptConfirmed){setNotice('Review and confirm the transcript before submitting.');return;}
-    const reportEvidence=toReportEvidence(evidence);
-    if(!reportEvidence){setNotice('Add a description before submitting.');return;}
-    if(!consent){setNotice('Please confirm the public location and media disclosure.');return;}
-    setBusy(true);
-    try{
-      const cleanTitle=title.trim()||reportEvidence.description.split(/[.!?\\n]/)[0].slice(0,72)||'Community report';
-      await onSubmit({title:cleanTitle,...reportEvidence,category,region,location:{lat:coords[0],lng:coords[1]}});
-    }catch(error){setNotice(error instanceof Error?error.message:'Could not save report.');}
-    finally{setBusy(false);}
-  };
-
-  return <div className="modal-backdrop"><div className="report-modal"><div className="modal-header"><div><div className="eyebrow">COMMUNITY SIGNAL <span className="eyebrow-divider">/</span> {region.toUpperCase()}</div><h2>Report an issue</h2><p>Help your city see what needs attention.</p></div><button className="icon-button" onClick={onClose}><X size={17}/></button></div><div className="steps"><div className="step active"><i>1</i><span>Capture</span></div><span className="step-line"/><div className={`step ${evidence.mediaFile?'active':''}`}><i>2</i><span>Describe</span></div><span className="step-line"/><div className="step active"><i>3</i><span>Location</span></div></div><div className="report-form"><div className="evidence-editor"><MediaEvidenceEditor onChange={setEvidence} disabled={busy}/></div><label className="field-label">Issue title<input value={title} onChange={event=>setTitle(event.target.value)} placeholder="e.g. Large pothole at the intersection" maxLength={100}/></label><div className="form-two-col"><label className="field-label">Category<select value={category} onChange={event=>setCategory(event.target.value)}>{['Street & sidewalk','Trash & sanitation','Lighting','Parks','Water & drainage','Public safety','Other'].map(value=><option key={value}>{value}</option>)}</select></label><label className="field-label">Location<input value={coords.map(value=>value.toFixed(5)).join(', ')} onChange={event=>{const [lat,lng]=event.target.value.split(',').map(Number);if(Number.isFinite(lat)&&Number.isFinite(lng))setCoords([lat,lng]);}} placeholder="latitude, longitude"/></label></div><div className="disclosure"><Shield size={16}/><span><strong>Public by design.</strong> Your report, issue location and media will be public on the map. Your email and account identity stay private.</span></div><label className="checkbox-row disclosure-check"><input type="checkbox" checked={consent} onChange={event=>setConsent(event.target.checked)}/> I understand my report and attached media are public</label></div><div className="modal-footer"><span className="anonymous-note"><Shield size={14}/> Shared anonymously</span><div><button className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={busy} onClick={()=>void submit()}>{busy?'Saving…':'Submit report'} <Send size={14}/></button></div></div></div></div>;
-}
 function ForumPage({posts,region,admin,update,setNotice}:{posts:ForumPost[];region:string;admin:boolean;update:(fn:(d:AppData)=>AppData)=>void;setNotice:(s:string)=>void}){
  const [topic,setTopic]=useState('All topics');const [compose,setCompose]=useState(false);const [draft,setDraft]=useState({title:'',body:'',topic:'Cost of living'});const [comment,setComment]=useState('');const [commenting,setCommenting]=useState<string|null>(null);const [moderation,setModeration]=useState(false);
  const shown=posts.filter(p=>p.region===region&&(topic==='All topics'||p.topic===topic)&&(!p.hidden||(moderation&&admin)));
