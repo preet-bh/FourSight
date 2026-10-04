@@ -64,9 +64,9 @@ export default function ReportComposer({ region, initialLocation, onClose, onSub
       <label className="field-label">Issue title<input value={title} onChange={event => setTitle(event.target.value)} placeholder="e.g. Large pothole at the intersection" maxLength={100}/></label>
       <label className="field-label">Category<select value={category} onChange={event => setCategory(event.target.value)}>{['Street & sidewalk', 'Trash & sanitation', 'Lighting', 'Parks', 'Water & drainage', 'Public safety', 'Other'].map(value => <option key={value}>{value}</option>)}</select></label>
       <div className="field-label"><strong>Where is the issue?</strong><ReportLocationPicker center={initialLocation ?? REGION_CENTERS[region]} selected={coordinates} onChange={setCoordinates}/></div>
-      <div className="disclosure"><Shield size={16}/><span><strong>Public by design.</strong> Your report, issue location and media will be public on the map. Your email and account identity stay private.</span></div>
+      <div className="disclosure"><Shield size={16}/><span><strong>Public by design.</strong> Your report, issue location and media will be public on the map. Your display name may be shown; your email stays private.</span></div>
       <label className="checkbox-row disclosure-check"><input type="checkbox" checked={consent} onChange={event => setConsent(event.target.checked)}/> I understand my report and attached media are public</label>
     </div>
-    <div className="modal-footer"><span className="anonymous-note"><Shield size={14}/> Shared anonymously</span><div><button className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={busy} onClick={() => void submit()}>{busy ? 'Saving…' : 'Submit report'} <Send size={14}/></button></div></div>
+    <div className="modal-footer"><span className="anonymous-note"><Shield size={14}/> Email stays private</span><div><button className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={busy} onClick={() => void submit()}>{busy ? 'Saving…' : 'Submit report'} <Send size={14}/></button></div></div>
   </div></div>;
 }

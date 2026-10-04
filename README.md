@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-Open the URL printed by Vite. With Supabase environment variables configured, the map and forum load shared data, users can create accounts and sign in, residents can submit public reports, and city admins can work the staff queue. Signup email confirmation remains enabled. Without Supabase configuration, FourSight runs in a clearly labeled local demo with seeded reports and a resident/admin role switch; local data is stored in this browser.
+Open the URL printed by Vite. With Supabase environment variables configured, the map and forum load shared data, users can create accounts and sign in, residents can submit public reports, and city admins can work the staff queue. Email-and-password signup confirmation remains enabled. Without Supabase configuration, FourSight runs in a clearly labeled local demo with seeded reports and a resident/admin role switch; local data is stored in this browser.
 
 Run checks with `npm test` and `npm run build`.
 
@@ -22,6 +22,10 @@ Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in `.env.local` for 
 ### Signup email capacity
 
 The FourSight Supabase project's custom SMTP switch is currently off. Supabase's built-in email sender allows only two Auth emails per hour per project and limits delivery to project team addresses, so it cannot support public signup with email confirmation. Configure an SMTP provider under [Authentication → Emails → SMTP Settings](https://supabase.com/dashboard/project/ahtikaimxxihoecopfzr/auth/smtp) using a verified sender address and the provider's SMTP host, port, username, and password. Keep email confirmation enabled. Once SMTP is saved, review [Authentication → Rate Limits](https://supabase.com/dashboard/project/ahtikaimxxihoecopfzr/auth/rate-limits) and set the email quota to match the provider's allowed throughput. The default custom SMTP limit is 30 emails per hour. Store SMTP credentials only in Supabase settings, never in this repository or a `VITE_` variable. Confirm delivery to an address outside the Supabase project team before opening public signup.
+
+### Google sign-in
+
+The account panel offers **Continue with Google** for residents who do not want to wait for a FourSight confirmation email. The FourSight Google OAuth client is configured with `https://four-sight.vercel.app` as an authorized JavaScript origin and `https://ahtikaimxxihoecopfzr.supabase.co/auth/v1/callback` as its redirect URI. The client ID and secret are stored only in [Supabase Authentication → Sign In / Providers → Google](https://supabase.com/dashboard/project/ahtikaimxxihoecopfzr/auth/providers?provider=Google), not in source control or a `VITE_` variable. The Supabase Site URL is `https://four-sight.vercel.app/`; add local development origins to the [redirect allow list](https://supabase.com/dashboard/project/ahtikaimxxihoecopfzr/auth/url-configuration) when developing locally. OAuth accounts use Google's verified email and profile name; email-and-password confirmation stays enabled for the separate password flow. Google Auth Platform's audience is External and its publishing status remains **Testing**, so only addresses listed under its [test users](https://console.cloud.google.com/auth/audience?project=project-df15ac22-9039-4c9b-8a9) can sign in. To open Google sign-in to the public later, provide a public privacy policy and publish the OAuth app.
 
 The old single-file prototype remains at [`foursight.html`](./foursight.html) for reference. The new app is under `src/`.
 

@@ -92,7 +92,9 @@ async function authenticatedUser(client: SupabaseClient) {
 }
 
 function displayNameForUser(user: { user_metadata?: Record<string, unknown> | null }): string {
-  return String(user.user_metadata?.display_name ?? '').trim() || 'Resident';
+  const metadata = user.user_metadata;
+  return [metadata?.display_name, metadata?.full_name, metadata?.name]
+    .find((value): value is string => typeof value === 'string' && Boolean(value.trim()))?.trim() || 'Resident';
 }
 
 async function loadAssociations(client: SupabaseClient, rows: DbRow[]) {

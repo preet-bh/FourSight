@@ -17,7 +17,8 @@ function requiredClient(client: SupabaseClient | null): SupabaseClient {
 async function stateForUser(client: SupabaseClient, user: User | null): Promise<AuthState> {
   if (!user) return { status: 'signed_out', user: null };
 
-  let displayName = typeof user.user_metadata?.display_name === 'string' ? user.user_metadata.display_name : '';
+  let displayName = [user.user_metadata?.display_name, user.user_metadata?.full_name, user.user_metadata?.name]
+    .find((value): value is string => typeof value === 'string' && Boolean(value.trim())) ?? '';
   let role: AuthRole = 'resident';
   try {
     const { data } = await client.from('profiles').select('display_name, role').eq('id', user.id).maybeSingle();
@@ -111,6 +112,14 @@ export function createAuthApi(client: SupabaseClient | null = supabase): AuthApi
       const normalizedEmail = email.trim();
       if (!validateEmail(normalizedEmail)) throw new Error('Enter a valid email address.');
       const { error } = await requiredClient(client).auth.updateUser({ email: normalizedEmail });
+      if (error) throw error;
+    },
+
+    async signInWithGoogle() {
+      const { error } = await requiredClient(client).auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: `${window.location.origin}/` },
+      });
       if (error) throw error;
     },
 

@@ -68,6 +68,7 @@ export interface AuthApi {
   signUp(input: { displayName: string; email: string; password: string }): Promise<{ confirmationRequired: true }>;
   signIn(input: { email: string; password: string }): Promise<void>;
   updateEmail(email: string): Promise<void>;
+  signInWithGoogle(): Promise<void>;
   signOut(): Promise<void>;
 }
 
