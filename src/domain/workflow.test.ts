@@ -13,6 +13,10 @@ const report: Report = {
 describe('ticket workflow', () => {
   it('removes private reporter and hidden tickets from the public view', () => {
     expect(publicReport(report)).not.toHaveProperty('reporterId');
+    expect(publicReport({
+      ...report,
+      reporterLocation: { lat: 42.317, lng: -83.232, accuracy: 25 },
+    })).not.toHaveProperty('reporterLocation');
     expect(publicReport({ ...report, hiddenFromMap: true })).toBeNull();
   });
 

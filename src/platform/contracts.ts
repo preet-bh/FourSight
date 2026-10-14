@@ -13,14 +13,14 @@ export type AuthState = {
   user: AuthUser | null;
 };
 
-/** Public map/report shape: no account identifiers, email, or staff-only hide reason. */
-export type PublicReportRecord = Omit<Report, 'reporterId' | 'hideReason'> & {
+/** Public map/report shape: no account identifiers, verification location, or staff-only hide reason. */
+export type PublicReportRecord = Omit<Report, 'reporterId' | 'reporterLocation' | 'hideReason'> & {
   databaseId: string;
   reporterName: string;
 };
 
-/** Staff queue shape carries the private hide reason but never account email. */
-export type StaffReportRecord = Omit<Report, 'reporterId'> & {
+/** Staff queue shape carries the private hide reason but never account or verification location. */
+export type StaffReportRecord = Omit<Report, 'reporterId' | 'reporterLocation'> & {
   databaseId: string;
   reporterName: string;
 };
@@ -33,6 +33,7 @@ export type ReportMediaUpload = {
 };
 
 export type NewReportInput = Pick<Report, 'title' | 'description' | 'category' | 'region' | 'location'> & {
+  reporterLocation: { lat: number; lng: number; accuracy: number };
   transcript?: string;
   media: ReportMediaUpload[];
 };

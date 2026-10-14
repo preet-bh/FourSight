@@ -2,20 +2,29 @@ import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { PublicReport } from '../domain/types';
-import { REGION_CENTERS } from './regions';
+import { CAMPUS_MAP_CONFIG } from './campus-config';
 
 export default function MapView({ region, reports, onSelect }: { region: string; reports: PublicReport[]; onSelect: (id: string) => void }) {
   const element = useRef<HTMLDivElement>(null); const map = useRef<L.Map | null>(null); const markers = useRef<L.LayerGroup | null>(null);
   useEffect(() => {
-    const center = REGION_CENTERS[region];
-    if (!element.current || map.current || !center) return;
-    map.current = L.map(element.current, { zoomControl: false }).setView(center, 14);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(map.current);
+    if (!element.current || map.current) return;
+    map.current = L.map(element.current, {
+      zoomControl: false,
+      minZoom: CAMPUS_MAP_CONFIG.minZoom,
+      maxZoom: CAMPUS_MAP_CONFIG.maxZoom,
+      maxBounds: CAMPUS_MAP_CONFIG.bounds,
+      maxBoundsViscosity: 0.9,
+    }).setView(CAMPUS_MAP_CONFIG.center, CAMPUS_MAP_CONFIG.zoom);
+    map.current.fitBounds(CAMPUS_MAP_CONFIG.campusBounds, {
+      padding: [18, 18],
+      maxZoom: CAMPUS_MAP_CONFIG.zoom,
+    });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: CAMPUS_MAP_CONFIG.maxZoom, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(map.current);
     L.control.zoom({ position: 'bottomright' }).addTo(map.current);
     markers.current = L.layerGroup().addTo(map.current);
     setTimeout(() => map.current?.invalidateSize(), 100);
     return () => { map.current?.remove(); map.current = null; };
-  }, [region]);
+  }, []);
   useEffect(() => {
     if (!map.current || !markers.current) return;
     markers.current.clearLayers();

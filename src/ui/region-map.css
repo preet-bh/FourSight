@@ -45,6 +45,27 @@
 
 .report-location-picker .report-location-map { height: 245px; width: 100%; cursor: crosshair; }
 .report-location-marker { background: #a895ff; }
+.report-location-legend { margin: 7px 0 0; color: #aeb5c3; font-size: 10px; }
+.report-location-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #493d2d;
+  border-radius: 7px;
+  background: #201c18;
+  color: #f0c17d;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.report-location-status.location-verified {
+  border-color: #28524d;
+  background: #172522;
+  color: #86ded2;
+}
+.report-location-status .secondary-button { flex: none; padding: 6px 9px; font-size: 10px; }
 .report-location-help {
   display: flex;
   align-items: center;
@@ -60,4 +81,5 @@
 @media (max-width: 520px) {
   .report-location-picker .report-location-map { height: 220px; }
   .report-location-help { align-items: flex-start; flex-direction: column; }
+  .report-location-status { align-items: flex-start; flex-direction: column; }
 }

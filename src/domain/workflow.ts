@@ -6,7 +6,7 @@ const next: Record<TicketStatus, TicketStatus[]> = {
 
 export function publicReport(report: Report): PublicReport | null {
   if (report.hiddenFromMap) return null;
-  const { reporterId: _private, ...safe } = report;
+  const { reporterId: _private, reporterLocation: _location, ...safe } = report;
   return safe;
 }
 

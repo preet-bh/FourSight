@@ -8,8 +8,9 @@ export type Report = {
   delivery: { state: DeliveryState; reference?: string; message?: string };
   region: string; location: { lat: number; lng: number }; createdAt: string; updatedAt: string;
   media: ReportMedia[]; transcript: string; assignedTeamId: string | null; reporterId?: string;
+  reporterLocation?: { lat: number; lng: number; accuracy: number };
   hiddenFromMap: boolean; hideReason: string | null; timeline: TicketEvent[];
 };
-export type PublicReport = Omit<Report, 'reporterId'>;
+export type PublicReport = Omit<Report, 'reporterId' | 'reporterLocation'>;
 export type Team = { id: string; name: string; category: string };
 export type ForumPost = { id: string; title: string; body: string; topic: string; region: string; author: string; at: string; comments: { id: string; body: string; author: string; at: string }[]; flags: number; hidden: boolean };
