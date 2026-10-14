@@ -203,6 +203,8 @@ export function createSupabaseDataApis(client: SupabaseClient): { civic: CivicDa
         public_id: publicId, owner_id: user.id, reporter_display_name: reporterName,
         title: input.title, description: input.description, confirmed_transcript: input.transcript || null,
         category: input.category, region: input.region, latitude: input.location.lat, longitude: input.location.lng,
+        reporter_latitude: input.reporterLocation.lat, reporter_longitude: input.reporterLocation.lng,
+        reporter_accuracy_meters: input.reporterLocation.accuracy,
       }).select(REPORT_FIELDS).single());
       const mediaRows: DbRow[] = [];
       for (const item of input.media) {

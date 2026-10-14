@@ -118,7 +118,8 @@ describe('authenticated display-name persistence', () => {
     const { civic } = createSupabaseDataApis(client);
     const report = await civic.createReport({
       title: 'Signal out', description: 'The signal is dark.', category: 'Street & sidewalk',
-      region: 'Boston', location: { lat: 42.35, lng: -71.06 }, media: [],
+      region: 'Boston', location: { lat: 42.35, lng: -71.06 },
+      reporterLocation: { lat: 42.35, lng: -71.06, accuracy: 25 }, media: [],
     });
     expect(inserted.reports.reporter_display_name).toBe('Avery Civic');
     expect(report.reporterName).toBe('Avery Civic');

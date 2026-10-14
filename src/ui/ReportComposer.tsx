@@ -1,16 +1,28 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Send, Shield, X } from 'lucide-react';
 import type { NewReportInput } from '../platform/contracts';
 import MediaEvidenceEditor, { emptyDraft, type MediaEvidenceDraft } from '../features/media/MediaEvidenceEditor';
 import { toReportEvidence } from './report-evidence';
-import { REGION_CENTERS } from './regions';
 import ReportLocationPicker from './ReportLocationPicker';
+import { CAMPUS_MAP_CONFIG } from './campus-config';
+import { isWithinRadius } from './campus-location';
 
 type Coordinates = [number, number];
+type LocationStatus = 'checking' | 'inside' | 'outside' | 'denied' | 'unavailable' | 'timeout' | 'unsupported' | 'poorAccuracy';
 
-export default function ReportComposer({ region, initialLocation, onClose, onSubmit, setNotice }: {
+const locationMessages: Record<LocationStatus, string> = {
+  checking: 'Checking your location…',
+  inside: 'Your location is within the UM-Dearborn reporting area.',
+  outside: 'You must be on or near the UM-Dearborn campus to report an issue.',
+  denied: 'Location access was denied. Enable location access for this site in your browser settings and turn on device location services, then retry.',
+  unavailable: 'Your location is unavailable. Enable location access for this site in your browser settings and turn on device location services, then retry.',
+  timeout: 'The location request timed out. Enable location access for this site and check device location services, then retry.',
+  unsupported: 'This browser does not support geolocation. Use a browser with location access to report an issue.',
+  poorAccuracy: 'Your location accuracy is over 100 m. Move to a place with a clearer GPS signal and retry.',
+};
+
+export default function ReportComposer({ region, onClose, onSubmit, setNotice }: {
   region: string;
-  initialLocation: Coordinates | null;
   onClose: () => void;
   onSubmit: (input: NewReportInput) => Promise<void>;
   setNotice: (message: string) => void;
@@ -21,8 +33,52 @@ export default function ReportComposer({ region, initialLocation, onClose, onSub
   const [coordinates, setCoordinates] = useState<Coordinates | null>(null);
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [locationStatus, setLocationStatus] = useState<LocationStatus>('checking');
+  const [reporterLocation, setReporterLocation] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
+  const locationRequest = useRef(0);
+
+  const requestLocation = useCallback(() => {
+    const requestId = ++locationRequest.current;
+    setReporterLocation(null);
+    setLocationStatus('checking');
+    if (!navigator.geolocation) {
+      setLocationStatus('unsupported');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(position => {
+      if (requestId !== locationRequest.current) return;
+      const { latitude, longitude, accuracy } = position.coords;
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)
+        || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+        setLocationStatus('unavailable');
+        return;
+      }
+      setReporterLocation({ lat: latitude, lng: longitude, accuracy });
+      if (!Number.isFinite(accuracy) || accuracy <= 0
+        || accuracy > CAMPUS_MAP_CONFIG.maxLocationAccuracyMeters) {
+        setLocationStatus('poorAccuracy');
+        return;
+      }
+      setLocationStatus(isWithinRadius(
+        [latitude, longitude],
+        CAMPUS_MAP_CONFIG.center,
+        CAMPUS_MAP_CONFIG.allowedRadiusMeters,
+      ) ? 'inside' : 'outside');
+    }, error => {
+      if (requestId !== locationRequest.current) return;
+      setLocationStatus(error.code === error.PERMISSION_DENIED
+        ? 'denied'
+        : error.code === error.TIMEOUT ? 'timeout' : 'unavailable');
+    }, { enableHighAccuracy: true, maximumAge: 0, timeout: 15_000 });
+  }, []);
+
+  useEffect(() => { requestLocation(); }, [requestLocation]);
 
   const submit = async () => {
+    if (locationStatus !== 'inside' || !reporterLocation) {
+      setNotice(locationMessages[locationStatus]);
+      return;
+    }
     if (!evidence.mediaFile) { setNotice('Attach a photo or short video before submitting.'); return; }
     if (evidence.mediaKind === 'video' && evidence.transcriptDraft.trim() && !evidence.transcriptConfirmed) {
       setNotice('Review and confirm the transcript before submitting.'); return;
@@ -41,6 +97,7 @@ export default function ReportComposer({ region, initialLocation, onClose, onSub
         category,
         region,
         location: { lat: coordinates[0], lng: coordinates[1] },
+        reporterLocation,
       });
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Could not save report.');
@@ -63,10 +120,17 @@ export default function ReportComposer({ region, initialLocation, onClose, onSub
       <div className="evidence-editor"><MediaEvidenceEditor onChange={setEvidence} disabled={busy}/></div>
       <label className="field-label">Issue title<input value={title} onChange={event => setTitle(event.target.value)} placeholder="e.g. Large pothole at the intersection" maxLength={100}/></label>
       <label className="field-label">Category<select value={category} onChange={event => setCategory(event.target.value)}>{['Street & sidewalk', 'Trash & sanitation', 'Lighting', 'Parks', 'Water & drainage', 'Public safety', 'Other'].map(value => <option key={value}>{value}</option>)}</select></label>
-      <div className="field-label"><strong>Where is the issue?</strong><ReportLocationPicker center={initialLocation ?? REGION_CENTERS[region]} selected={coordinates} onChange={setCoordinates}/></div>
+      <div className="field-label"><strong>Where is the issue?</strong><ReportLocationPicker selected={coordinates} onChange={setCoordinates} userLocation={reporterLocation}/></div>
+      <p className="report-location-legend">Teal circle: reporting area. Purple dot: your location.</p>
+      <div className={`report-location-status ${locationStatus === 'inside' ? 'location-verified' : ''}`}>
+        <span role="status" aria-live="polite">{locationMessages[locationStatus]}</span>
+        <button type="button" className="secondary-button" onClick={requestLocation} disabled={busy || locationStatus === 'checking'}>
+          {locationStatus === 'checking' ? 'Checking location…' : 'Retry location'}
+        </button>
+      </div>
       <div className="disclosure"><Shield size={16}/><span><strong>Public by design.</strong> Your report, issue location and media will be public on the map. Your email and account identity stay private.</span></div>
       <label className="checkbox-row disclosure-check"><input type="checkbox" checked={consent} onChange={event => setConsent(event.target.checked)}/> I understand my report and attached media are public</label>
     </div>
-    <div className="modal-footer"><span className="anonymous-note"><Shield size={14}/> Shared anonymously</span><div><button className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={busy} onClick={() => void submit()}>{busy ? 'Saving…' : 'Submit report'} <Send size={14}/></button></div></div>
+    <div className="modal-footer"><span className="anonymous-note"><Shield size={14}/> Shared anonymously</span><div><button className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={busy || locationStatus !== 'inside'} onClick={() => void submit()}>{busy ? 'Saving…' : 'Submit report'} <Send size={14}/></button></div></div>
   </div></div>;
 }

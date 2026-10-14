@@ -1,6 +1,8 @@
+import { CAMPUS_MAP_CONFIG } from './campus-config';
+
 export const REGION_CENTERS: Record<string, [number, number]> = {
   Boston: [42.355, -71.065],
-  Dearborn: [42.3223, -83.1763],
+  Dearborn: CAMPUS_MAP_CONFIG.center,
 };
 
 const nearbyRegionKilometers = 15;
